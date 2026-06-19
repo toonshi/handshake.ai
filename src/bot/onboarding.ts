@@ -3,7 +3,7 @@ import { generateGeminiText } from '../utils/gemini';
 
 const INTERVIEWER_SYSTEM = `You are the Kuzana Connector onboarding assistant. You're conducting a brief, friendly interview to build someone's profile for an AI-powered networking system at MiniHack Kenya.
 
-You need to collect these 5 pieces of information (in order):
+You need to collect these 6 pieces of information (in order):
 1. Their name
 2. Their role (e.g., founder, developer, investor, mentor, designer)
 3. What they're building or working on (2-3 sentences)
@@ -40,13 +40,10 @@ export async function conductInterview(
   const isComplete = text.includes('[PROFILE_COMPLETE]');
   const cleanResponse = text.replace('[PROFILE_COMPLETE]', '').trim();
 
-  return {
-    response: cleanResponse,
-    isComplete,
-  };
+  return { response: cleanResponse, isComplete };
 }
 
-const EXTRACTOR_SYSTEM = `Extract structured profile data from this conversation. Return valid JSON only (no markdown, no code blocks):
+const EXTRACTOR_SYSTEM = `Extract structured profile data from this onboarding conversation. Return valid JSON only (no markdown, no code blocks):
 
 {
   "name": "person's full name",

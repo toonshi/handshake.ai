@@ -1,6 +1,6 @@
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
 import { config } from '../config';
-import { User, Match } from '../types';
+import { User, Match, ProfileEnrichments } from '../types';
 
 export interface Database {
   public: {
@@ -135,6 +135,18 @@ export async function getUserById(id: string): Promise<User | null> {
     throw new Error(`Failed to get user: ${error.message}`);
   }
   return data as User | null;
+}
+
+export async function updateUserEnrichments(
+  userId: string,
+  enrichments: ProfileEnrichments
+): Promise<void> {
+  const db = getSupabase();
+  const { error } = await db
+    .from('users')
+    .update({ enrichments })
+    .eq('id', userId);
+  if (error) throw new Error(`Failed to update enrichments: ${error.message}`);
 }
 
 export async function updateUserEmbeddings(

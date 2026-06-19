@@ -16,7 +16,6 @@ async function callGemini(
 }
 
 function parseAgentScore(raw: string): AgentScore {
-  // Strip markdown code fences if present
   const cleaned = raw.replace(/```(?:json)?\n?/g, '').replace(/```/g, '').trim();
   try {
     const parsed = JSON.parse(cleaned);
@@ -26,7 +25,6 @@ function parseAgentScore(raw: string): AgentScore {
       conversation_starter: String(parsed.conversation_starter || ''),
     };
   } catch {
-    // Fallback: extract score from text
     const scoreMatch = raw.match(/match_score["\s:]+([0-9.]+)/);
     return {
       score: scoreMatch ? parseFloat(scoreMatch[1]) : 0,
@@ -62,10 +60,9 @@ export async function runAgentNegotiation(
   ]);
   transcript.push({ agent: 'B', content: turn2 });
 
-  // Conversation summary for scoring context
+  // Turn 3: Independent scoring from both agents
   const conversationContext = `Agent A (${userA.name}): ${turn1}\n\nAgent B (${userB.name}): ${turn2}`;
 
-  // Turn 3: Independent scoring from both agents
   const [scoreARaw, scoreBRaw] = await Promise.all([
     callGemini(agentASystem, [
       { role: 'user', content: `${conversationContext}\n\n${buildScoringPrompt(userA, userB)}` },
@@ -78,15 +75,11 @@ export async function runAgentNegotiation(
   const scoreA = parseAgentScore(scoreARaw);
   const scoreB = parseAgentScore(scoreBRaw);
 
-  // Use Agent A's rationale and conversation starter as primary (it represents the "seeker")
-  const primaryRationale = scoreA.rationale || scoreB.rationale;
-  const primaryStarter = scoreA.conversation_starter || scoreB.conversation_starter;
-
   return {
     agentAScore: scoreA.score,
     agentBScore: scoreB.score,
-    rationale: primaryRationale,
-    conversationStarter: primaryStarter,
+    rationale: scoreA.rationale || scoreB.rationale,
+    conversationStarter: scoreA.conversation_starter || scoreB.conversation_starter,
     transcript,
   };
 }
