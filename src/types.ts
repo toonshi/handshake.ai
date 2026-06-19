@@ -9,6 +9,7 @@ export interface User {
   goals: string;
   challenges: string;
   offers: string;
+  enrichments?: ProfileEnrichments;
   goal_embedding?: number[];
   challenge_embedding?: number[];
   created_at: string;
@@ -92,4 +93,43 @@ export interface ProfileData {
 export interface CallScript {
   personAScript: string;
   personBScript: string;
+}
+
+// ─── Profile enrichment ───────────────────────────────────────────────────────
+
+export interface GitHubEnrichment {
+  username: string;
+  bio: string;
+  company: string;
+  location: string;
+  topLanguages: string[];
+  topRepos: Array<{
+    name: string;
+    description: string;
+    stars: number;
+    language: string;
+  }>;
+  fetchedAt: string;
+}
+
+export interface WebsiteEnrichment {
+  url: string;
+  type: 'portfolio' | 'startup' | 'social' | 'other';
+  summary: string;
+  keyPoints: string[];
+  fetchedAt: string;
+}
+
+export interface ResumeEnrichment {
+  summary: string;
+  skills: string[];
+  experienceHighlights: string[];
+  education: string[];
+  fetchedAt: string;
+}
+
+export interface ProfileEnrichments {
+  github?: GitHubEnrichment;
+  websites: WebsiteEnrichment[];
+  resume?: ResumeEnrichment;
 }

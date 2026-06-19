@@ -13,6 +13,7 @@ create table if not exists users (
   goals text not null,
   challenges text not null,
   offers text not null,
+  enrichments jsonb not null default '{"websites":[]}',
   goal_embedding vector(768),
   challenge_embedding vector(768),
   created_at timestamptz not null default now(),
