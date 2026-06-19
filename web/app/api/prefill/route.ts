@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { GoogleGenerativeAI } from "@google/generative-ai";
 
 function getGenAI() {
-  return new GoogleGenerativeAI(process.env.GOOGLE_AI_API_KEY!);
+  return new GoogleGenerativeAI(process.env.GEMINI_API_KEY!);
 }
 
 export interface PrefillResult {

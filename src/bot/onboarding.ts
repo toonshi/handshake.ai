@@ -1,15 +1,5 @@
-import { GoogleGenerativeAI } from '@google/generative-ai';
-import { config } from '../config';
 import { OnboardingSession, ProfileData } from '../types';
-
-let _genai: GoogleGenerativeAI | null = null;
-
-function getGenAI(): GoogleGenerativeAI {
-  if (!_genai) {
-    _genai = new GoogleGenerativeAI(config.google.apiKey);
-  }
-  return _genai;
-}
+import { generateGeminiText } from '../utils/gemini';
 
 const INTERVIEWER_SYSTEM = `You are the Kuzana Connector onboarding assistant. You're conducting a brief, friendly interview to build someone's profile for an AI-powered networking system at MiniHack Kenya.
 
@@ -41,26 +31,12 @@ export async function conductInterview(
   session: OnboardingSession,
   userMessage: string
 ): Promise<InterviewResult> {
-  const genai = getGenAI();
-  const model = genai.getGenerativeModel({
-    model: config.google.model,
-    systemInstruction: INTERVIEWER_SYSTEM,
-  });
+  const updatedHistory = [
+    ...session.history,
+    { role: 'user' as const, content: userMessage },
+  ];
 
-  // Convert history to Gemini format (all but build fresh with user message appended)
-  const history = session.history.map((m) => ({
-    role: m.role === 'assistant' ? 'model' : 'user',
-    parts: [{ text: m.content }],
-  }));
-
-  const chat = model.startChat({
-    history,
-    generationConfig: { maxOutputTokens: 300 },
-  });
-
-  const result = await chat.sendMessage(userMessage);
-  const text = result.response.text().trim();
-
+  const text = await generateGeminiText(INTERVIEWER_SYSTEM, updatedHistory, 300);
   const isComplete = text.includes('[PROFILE_COMPLETE]');
   const cleanResponse = text.replace('[PROFILE_COMPLETE]', '').trim();
 
@@ -83,20 +59,17 @@ If any field is unclear, use your best inference from context. All fields are re
 export async function extractProfileFromHistory(
   history: Array<{ role: 'user' | 'assistant'; content: string }>
 ): Promise<ProfileData> {
-  const genai = getGenAI();
-  const model = genai.getGenerativeModel({
-    model: config.google.model,
-    systemInstruction: EXTRACTOR_SYSTEM,
-  });
-
   const conversationText = history
     .map((m) => `${m.role === 'user' ? 'User' : 'Interviewer'}: ${m.content}`)
     .join('\n\n');
 
-  const result = await model.generateContent(
-    `Extract the profile from this conversation:\n\n${conversationText}`
-  );
-  const text = result.response.text().trim();
+  const text = await generateGeminiText('', [
+    {
+      role: 'user',
+      content: `${EXTRACTOR_SYSTEM}\n\nConversation:\n${conversationText}`,
+    },
+  ], 500);
+
   const cleaned = text.replace(/```(?:json)?\n?/g, '').replace(/```/g, '').trim();
 
   try {

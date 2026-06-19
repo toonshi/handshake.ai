@@ -1,24 +1,11 @@
-import { GoogleGenerativeAI } from '@google/generative-ai';
-import { config } from '../config';
 import { User, Match, CallScript } from '../types';
-
-let _genai: GoogleGenerativeAI | null = null;
-
-function getGenAI(): GoogleGenerativeAI {
-  if (!_genai) {
-    _genai = new GoogleGenerativeAI(config.google.apiKey);
-  }
-  return _genai;
-}
+import { generateGeminiText } from '../utils/gemini';
 
 export async function generateCallScripts(
   match: Match,
   userA: User,
   userB: User
 ): Promise<CallScript> {
-  const genai = getGenAI();
-  const model = genai.getGenerativeModel({ model: config.google.model });
-
   const prompt = `Generate two ultra-concise phone call scripts (under 30 seconds each when spoken aloud) for an AI voice agent introducing a high-confidence match.
 
 Person A: ${userA.name} (${userA.role})
@@ -46,8 +33,7 @@ Return as JSON only (no markdown):
   "personBScript": "script for calling ${userB.name}"
 }`;
 
-  const result = await model.generateContent(prompt);
-  const text = result.response.text().trim();
+  const text = await generateGeminiText('', [{ role: 'user', content: prompt }], 400);
   const cleaned = text.replace(/```(?:json)?\n?/g, '').replace(/```/g, '').trim();
 
   try {

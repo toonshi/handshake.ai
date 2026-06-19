@@ -10,9 +10,9 @@ AI-powered matchmaking for the Kuzana/MiniHack Kenya community. Instead of intro
 
 ```
 1. Onboard via Telegram → 5-minute conversational interview
-2. Agent instantiated from your profile (Claude)
+2. Agent instantiated from your profile (Gemini)
 3. Every 2 hours: pgvector finds candidate pairs
-4. Agent-to-agent negotiation (3-turn Claude conversation)
+4. Agent-to-agent negotiation (3-turn Gemini conversation)
 5. Both scores > 0.72 → Telegram notification
 6. Both consent → ElevenLabs voice call with context briefing
 7. 24h later → feedback loop (thumbs up/down updates matching weights)
@@ -23,8 +23,8 @@ AI-powered matchmaking for the Kuzana/MiniHack Kenya community. Instead of intro
 | Layer | Tool |
 |---|---|
 | Onboarding & notifications | Telegram Bot API |
-| Conversation & agents | Claude claude-sonnet-4-6 (Anthropic) |
-| Embeddings | OpenAI text-embedding-3-small |
+| Conversation & agents | Gemini |
+| Embeddings | Gemini embeddings |
 | Database + vector search | Supabase + pgvector |
 | Voice introductions | ElevenLabs Conversational AI |
 | Scheduler | node-cron |
@@ -46,8 +46,7 @@ cp .env.example .env
 
 Required variables:
 - `TELEGRAM_BOT_TOKEN` — from @BotFather
-- `ANTHROPIC_API_KEY` — Claude API key
-- `OPENAI_API_KEY` — for embeddings
+- `GEMINI_API_KEY` — for onboarding, agent negotiation, call scripts, and embeddings
 - `SUPABASE_URL` + `SUPABASE_SERVICE_KEY` — from your Supabase project
 - `ELEVENLABS_API_KEY` + `ELEVENLABS_AGENT_ID` — from ElevenLabs dashboard
 
@@ -81,9 +80,9 @@ npm start          # Run compiled output
 
 ```
 ONBOARDING LAYER
-  Telegram Bot + Claude-powered interview
+  Telegram Bot + Gemini-powered interview
   Profile extraction -> Supabase users table
-  OpenAI embeddings (goals + challenges vectors)
+  Gemini embeddings (goals + challenges vectors)
         |
 MATCHING ENGINE
   node-cron: every 2 hours
@@ -120,16 +119,16 @@ src/
 │   └── supabase.ts          # DB client + typed queries
 ├── bot/
 │   ├── index.ts             # Bot setup, routing, commands
-│   ├── onboarding.ts        # Claude-powered interview flow
+│   ├── onboarding.ts        # Gemini-powered interview flow
 │   └── notifications.ts     # Match notifications, consent, feedback
 ├── agents/
 │   ├── prompts.ts           # Agent system prompt generation
 │   └── negotiation.ts       # 3-turn agent-to-agent negotiation
 ├── matching/
-│   ├── embeddings.ts        # OpenAI embedding generation
+│   ├── embeddings.ts        # Gemini embedding generation
 │   └── scheduler.ts         # Cron scheduler + matching cycle
 ├── introduction/
-│   ├── callscript.ts        # Claude call script generation
+│   ├── callscript.ts        # Gemini call script generation
 │   └── elevenlabs.ts        # ElevenLabs outbound call API
 └── utils/
     ├── logger.ts             # Structured JSON logger

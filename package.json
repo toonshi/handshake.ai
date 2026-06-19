@@ -9,7 +9,6 @@
     "dev": "ts-node-dev --respawn --transpile-only src/index.ts"
   },
   "dependencies": {
-    "@google/generative-ai": "^0.21.0",
     "@supabase/supabase-js": "^2.43.4",
     "node-cron": "^3.0.3",
     "node-telegram-bot-api": "^0.64.0",

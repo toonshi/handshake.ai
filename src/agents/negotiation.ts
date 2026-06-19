@@ -1,6 +1,5 @@
-import { GoogleGenerativeAI } from '@google/generative-ai';
-import { config } from '../config';
 import { User, NegotiationResult, AgentTurn, AgentScore } from '../types';
+import { generateGeminiText } from '../utils/gemini';
 import {
   buildAgentSystemPrompt,
   buildNegotiationTurn1Prompt,
@@ -8,41 +7,12 @@ import {
   buildScoringPrompt,
 } from './prompts';
 
-let _genai: GoogleGenerativeAI | null = null;
-
-function getGenAI(): GoogleGenerativeAI {
-  if (!_genai) {
-    _genai = new GoogleGenerativeAI(config.google.apiKey);
-  }
-  return _genai;
-}
-
 async function callGemini(
   systemPrompt: string,
   messages: Array<{ role: 'user' | 'assistant'; content: string }>,
   maxTokens = 500
 ): Promise<string> {
-  const genai = getGenAI();
-  const model = genai.getGenerativeModel({
-    model: config.google.model,
-    systemInstruction: systemPrompt,
-  });
-
-  // Convert to Gemini history format (all but last message)
-  const history = messages.slice(0, -1).map((m) => ({
-    role: m.role === 'assistant' ? 'model' : 'user',
-    parts: [{ text: m.content }],
-  }));
-
-  const lastMessage = messages[messages.length - 1];
-
-  const chat = model.startChat({
-    history,
-    generationConfig: { maxOutputTokens: maxTokens },
-  });
-
-  const result = await chat.sendMessage(lastMessage.content);
-  return result.response.text().trim();
+  return generateGeminiText(systemPrompt, messages, maxTokens);
 }
 
 function parseAgentScore(raw: string): AgentScore {

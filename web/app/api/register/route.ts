@@ -11,7 +11,7 @@ function getSupabase() {
 }
 
 function getGenAI() {
-  return new GoogleGenerativeAI(process.env.GOOGLE_AI_API_KEY!);
+  return new GoogleGenerativeAI(process.env.GEMINI_API_KEY!);
 }
 
 async function generateEmbedding(text: string): Promise<number[]> {

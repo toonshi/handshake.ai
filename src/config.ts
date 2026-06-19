@@ -32,11 +32,11 @@ export const config = {
   telegram: {
     token: required('TELEGRAM_BOT_TOKEN'),
   },
-  google: {
-    apiKey: required('GOOGLE_AI_API_KEY'),
-    model: 'gemini-1.5-flash' as const,
-    embeddingModel: 'text-embedding-004' as const,
-    embeddingDimensions: 768,
+  gemini: {
+    apiKey: required('GEMINI_API_KEY'),
+    textModel: optional('GEMINI_TEXT_MODEL', 'gemini-2.5-flash'),
+    embeddingModel: optional('GEMINI_EMBEDDING_MODEL', 'gemini-embedding-2'),
+    embeddingDimensions: parseInt(optional('GEMINI_EMBEDDING_DIMENSIONS', '1536'), 10),
   },
   supabase: {
     url: required('SUPABASE_URL'),
@@ -45,6 +45,7 @@ export const config = {
   elevenlabs: {
     apiKey: required('ELEVENLABS_API_KEY'),
     agentId: required('ELEVENLABS_AGENT_ID'),
+    agentTemplateId: optional('ELEVENLABS_AGENT_TEMPLATE_ID', ''),
   },
   matching: {
     scoreThreshold: parseFloat(optional('MATCH_SCORE_THRESHOLD', '0.72')),

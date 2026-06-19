@@ -1,26 +1,15 @@
-import { GoogleGenerativeAI } from '@google/generative-ai';
-import { config } from '../config';
+import { generateGeminiText } from '../utils/gemini';
 import { WebsiteEnrichment } from '../types';
 
-let _genai: GoogleGenerativeAI | null = null;
-
-function getGenAI(): GoogleGenerativeAI {
-  if (!_genai) _genai = new GoogleGenerativeAI(config.google.apiKey);
-  return _genai;
-}
-
 function stripHtml(html: string): string {
-  // Remove script/style blocks entirely
   let text = html
     .replace(/<script[\s\S]*?<\/script>/gi, ' ')
     .replace(/<style[\s\S]*?<\/style>/gi, ' ')
     .replace(/<nav[\s\S]*?<\/nav>/gi, ' ')
     .replace(/<footer[\s\S]*?<\/footer>/gi, ' ');
 
-  // Replace tags with spaces
   text = text.replace(/<[^>]+>/g, ' ');
 
-  // Decode common HTML entities
   text = text
     .replace(/&amp;/g, '&')
     .replace(/&lt;/g, '<')
@@ -29,7 +18,6 @@ function stripHtml(html: string): string {
     .replace(/&#39;/g, "'")
     .replace(/&nbsp;/g, ' ');
 
-  // Collapse whitespace
   return text.replace(/\s+/g, ' ').trim();
 }
 
@@ -55,7 +43,6 @@ function detectSiteType(url: string, content: string): WebsiteEnrichment['type']
 }
 
 export async function scrapeAndExtract(url: string): Promise<WebsiteEnrichment> {
-  // Validate URL
   let parsed: URL;
   try {
     parsed = new URL(url);
@@ -67,7 +54,6 @@ export async function scrapeAndExtract(url: string): Promise<WebsiteEnrichment> 
     throw new Error('Only HTTP/HTTPS URLs are supported');
   }
 
-  // Fetch page
   const response = await fetch(url, {
     headers: {
       'User-Agent':
@@ -82,13 +68,8 @@ export async function scrapeAndExtract(url: string): Promise<WebsiteEnrichment> 
   }
 
   const html = await response.text();
-  const text = stripHtml(html).slice(0, 4000); // cap at 4k chars for Gemini
-
+  const text = stripHtml(html).slice(0, 4000);
   const type = detectSiteType(url, text);
-
-  // Gemini extraction
-  const genai = getGenAI();
-  const model = genai.getGenerativeModel({ model: config.google.model });
 
   const prompt = `You are extracting professional profile information from a webpage for a networking/matchmaking system.
 
@@ -104,8 +85,7 @@ Extract the following as JSON only (no markdown):
 
 Focus on what's professionally relevant. If the page is behind a login or has no useful content, set summary to "Content not accessible" and keyPoints to [].`;
 
-  const result = await model.generateContent(prompt);
-  const raw = result.response.text().trim();
+  const raw = await generateGeminiText('', [{ role: 'user', content: prompt }], 400);
   const cleaned = raw.replace(/```(?:json)?\n?/g, '').replace(/```/g, '').trim();
 
   let extracted: { summary: string; keyPoints: string[] };

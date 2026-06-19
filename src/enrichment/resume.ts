@@ -1,28 +1,15 @@
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 const pdfParse = require('pdf-parse') as (buffer: Buffer) => Promise<{ text: string; numpages: number }>;
-import { GoogleGenerativeAI } from '@google/generative-ai';
-import { config } from '../config';
+import { generateGeminiText } from '../utils/gemini';
 import { ResumeEnrichment } from '../types';
 
-let _genai: GoogleGenerativeAI | null = null;
-
-function getGenAI(): GoogleGenerativeAI {
-  if (!_genai) _genai = new GoogleGenerativeAI(config.google.apiKey);
-  return _genai;
-}
-
 export async function parseResume(fileBuffer: Buffer): Promise<ResumeEnrichment> {
-  // Extract text from PDF
   const pdf = await pdfParse(fileBuffer);
   const text = pdf.text.replace(/\s+/g, ' ').trim().slice(0, 5000);
 
   if (!text || text.length < 50) {
     throw new Error('Could not extract readable text from this PDF');
   }
-
-  // Gemini extraction
-  const genai = getGenAI();
-  const model = genai.getGenerativeModel({ model: config.google.model });
 
   const prompt = `Extract structured information from this resume/CV for a professional networking system.
 
@@ -37,8 +24,7 @@ Return JSON only (no markdown):
   "education": ["degrees or certifications, institution, year if available"]
 }`;
 
-  const result = await model.generateContent(prompt);
-  const raw = result.response.text().trim();
+  const raw = await generateGeminiText('', [{ role: 'user', content: prompt }], 600);
   const cleaned = raw.replace(/```(?:json)?\n?/g, '').replace(/```/g, '').trim();
 
   let extracted: {
@@ -68,9 +54,7 @@ Return JSON only (no markdown):
   };
 }
 
-export async function downloadTelegramFile(
-  fileUrl: string
-): Promise<Buffer> {
+export async function downloadTelegramFile(fileUrl: string): Promise<Buffer> {
   const response = await fetch(fileUrl, {
     signal: AbortSignal.timeout(30_000),
   });

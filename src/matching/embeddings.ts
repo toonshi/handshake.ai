@@ -1,20 +1,7 @@
-import { GoogleGenerativeAI } from '@google/generative-ai';
-import { config } from '../config';
-
-let _genai: GoogleGenerativeAI | null = null;
-
-function getGenAI(): GoogleGenerativeAI {
-  if (!_genai) {
-    _genai = new GoogleGenerativeAI(config.google.apiKey);
-  }
-  return _genai;
-}
+import { generateGeminiEmbedding } from '../utils/gemini';
 
 export async function generateEmbedding(text: string): Promise<number[]> {
-  const genai = getGenAI();
-  const model = genai.getGenerativeModel({ model: config.google.embeddingModel });
-  const result = await model.embedContent(text);
-  return result.embedding.values;
+  return generateGeminiEmbedding(text);
 }
 
 export async function generateUserEmbeddings(
