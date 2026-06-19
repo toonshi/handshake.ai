@@ -7,6 +7,7 @@ create table if not exists users (
   telegram_id bigint unique not null,
   telegram_username text,
   phone_number text,
+  accept_all_matches boolean not null default false,
   name text not null,
   role text not null,
   description text not null,
@@ -14,8 +15,8 @@ create table if not exists users (
   challenges text not null,
   offers text not null,
   enrichments jsonb not null default '{"websites":[]}',
-  goal_embedding vector(768),
-  challenge_embedding vector(768),
+  goal_embedding vector(1536),
+  challenge_embedding vector(1536),
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
@@ -31,6 +32,8 @@ create table if not exists matches (
   transcript jsonb not null default '[]',
   rationale text not null default '',
   conversation_starter text not null default '',
+  collaboration_opportunities jsonb not null default '[]',
+  shared_tech_stack jsonb not null default '[]',
   status text not null default 'negotiating',
   user_a_consent boolean not null default false,
   user_b_consent boolean not null default false,
@@ -75,7 +78,7 @@ create trigger matches_updated_at
 
 -- pgvector similarity search: match User A's goal embedding against other users' challenge embeddings
 create or replace function match_profiles(
-  query_embedding vector(768),
+  query_embedding vector(1536),
   match_threshold float,
   match_count int,
   exclude_user_id uuid
