@@ -1,5 +1,5 @@
 import { User, NegotiationResult, AgentTurn, AgentScore } from '../types';
-import { generateGeminiText } from '../gemini';
+import { generateGeminiText, streamGeminiText } from '../gemini';
 import {
   buildAgentSystemPrompt,
   buildNegotiationTurn1Prompt,
@@ -186,4 +186,122 @@ Agent B (${userB.name}): ${turn4}`;
     sharedTechStack,
     transcript,
   };
+}
+
+export interface NegotiationCallbacks {
+  onTurnStart: (agent: 'A' | 'B', name: string, turn: number) => void;
+  onToken: (agent: 'A' | 'B', text: string) => void;
+  onTurnEnd: (agent: 'A' | 'B', turn: number) => void;
+  onScoring: () => void;
+  onResult: (result: NegotiationResult) => void;
+}
+
+export async function runAgentNegotiationStreaming(
+  userA: User,
+  userB: User,
+  callbacks: NegotiationCallbacks
+): Promise<NegotiationResult> {
+  const transcript: AgentTurn[] = [];
+
+  const [liveReposA, liveReposB] = await Promise.all([
+    userA.enrichments?.github?.username
+      ? fetchLiveGitHubRepos(userA.enrichments.github.username)
+      : Promise.resolve([] as LiveRepo[]),
+    userB.enrichments?.github?.username
+      ? fetchLiveGitHubRepos(userB.enrichments.github.username)
+      : Promise.resolve([] as LiveRepo[]),
+  ]);
+
+  const agentASystem = buildAgentSystemPrompt(userA, liveReposA);
+  const agentBSystem = buildAgentSystemPrompt(userB, liveReposB);
+
+  // Turn 1: Agent A introduces
+  callbacks.onTurnStart('A', userA.name, 1);
+  const turn1 = await streamGeminiText(
+    agentASystem,
+    [{ role: 'user', content: buildNegotiationTurn1Prompt(userA, userB) }],
+    (t) => callbacks.onToken('A', t)
+  );
+  transcript.push({ agent: 'A', content: turn1 });
+  callbacks.onTurnEnd('A', 1);
+
+  // Turn 2: Agent B responds
+  callbacks.onTurnStart('B', userB.name, 2);
+  const turn2 = await streamGeminiText(
+    agentBSystem,
+    [{ role: 'user', content: buildNegotiationTurn2Prompt(userB, turn1) }],
+    (t) => callbacks.onToken('B', t)
+  );
+  transcript.push({ agent: 'B', content: turn2 });
+  callbacks.onTurnEnd('B', 2);
+
+  const conversationSoFar = `=== Conversation transcript so far ===
+Agent A (${userA.name}): ${turn1}
+
+Agent B (${userB.name}): ${turn2}
+=== End transcript ===`;
+
+  // Turn 3: Agent A proposes collaboration
+  callbacks.onTurnStart('A', userA.name, 3);
+  const turn3 = await streamGeminiText(
+    agentASystem,
+    [{ role: 'user', content: `${conversationSoFar}\n\n${buildNegotiationTurn3Prompt(userA)}` }],
+    (t) => callbacks.onToken('A', t)
+  );
+  transcript.push({ agent: 'A', content: turn3 });
+  callbacks.onTurnEnd('A', 3);
+
+  const conversationWithTurn3 = `${conversationSoFar}
+
+Agent A (${userA.name}): ${turn3}`;
+
+  // Turn 4: Agent B confirms or refines
+  callbacks.onTurnStart('B', userB.name, 4);
+  const turn4 = await streamGeminiText(
+    agentBSystem,
+    [{ role: 'user', content: `${conversationWithTurn3}\n\n${buildNegotiationTurn4Prompt(userB)}` }],
+    (t) => callbacks.onToken('B', t)
+  );
+  transcript.push({ agent: 'B', content: turn4 });
+  callbacks.onTurnEnd('B', 4);
+
+  const fullConversation = `${conversationWithTurn3}
+
+Agent B (${userB.name}): ${turn4}`;
+
+  callbacks.onScoring();
+
+  const [scoreARaw, scoreBRaw] = await Promise.all([
+    generateGeminiText(agentASystem, [
+      { role: 'user', content: `${fullConversation}\n\n${buildScoringPrompt(userA, userB)}` },
+    ], 600),
+    generateGeminiText(agentBSystem, [
+      { role: 'user', content: `${fullConversation}\n\n${buildScoringPrompt(userB, userA)}` },
+    ], 600),
+  ]);
+
+  const scoreA = parseAgentScore(scoreARaw);
+  const scoreB = parseAgentScore(scoreBRaw);
+
+  const collaborationOpportunities = mergeUnique(
+    scoreA.collaboration_opportunities,
+    scoreB.collaboration_opportunities
+  );
+  const sharedTechStack = mergeUnique(
+    scoreA.shared_tech_stack,
+    scoreB.shared_tech_stack
+  );
+
+  const result: NegotiationResult = {
+    agentAScore: scoreA.score,
+    agentBScore: scoreB.score,
+    rationale: scoreA.rationale || scoreB.rationale,
+    conversationStarter: scoreA.conversation_starter || scoreB.conversation_starter,
+    collaborationOpportunities,
+    sharedTechStack,
+    transcript,
+  };
+
+  callbacks.onResult(result);
+  return result;
 }

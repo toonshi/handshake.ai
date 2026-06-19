@@ -1,3 +1,4 @@
+import Link from "next/link";
 import RegistrationForm from "@/components/registration-form";
 
 export default function Home() {
@@ -7,9 +8,14 @@ export default function Home() {
 
         {/* Header */}
         <header className="space-y-4">
-          <div className="inline-flex items-center gap-2 text-xs font-mono text-[#52525b] border border-[#27272a] rounded-full px-3 py-1.5">
-            <span className="w-1.5 h-1.5 rounded-full bg-[#4ade80] animate-pulse inline-block" />
-            MiniHack Kenya · Kuzana Connector
+          <div className="flex items-center gap-2 flex-wrap">
+            <div className="inline-flex items-center gap-2 text-xs font-mono text-[#52525b] border border-[#27272a] rounded-full px-3 py-1.5">
+              <span className="w-1.5 h-1.5 rounded-full bg-[#4ade80] animate-pulse inline-block" />
+              MiniHack Kenya · Kuzana Connector
+            </div>
+            <Link href="/live" className="inline-flex items-center gap-1.5 text-xs font-mono text-[#a1a1aa] hover:text-white border border-[#27272a] hover:border-[#3f3f46] rounded-full px-3 py-1.5 transition-colors">
+              Watch live →
+            </Link>
           </div>
 
           <div className="space-y-3">

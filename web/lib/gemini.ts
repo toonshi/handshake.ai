@@ -87,6 +87,77 @@ export async function generateGeminiText(
   return text;
 }
 
+export async function streamGeminiText(
+  systemPrompt: string,
+  messages: Array<{ role: 'user' | 'assistant'; content: string }>,
+  onToken: (text: string) => void,
+  maxTokens = 500
+): Promise<string> {
+  const contents: GeminiContent[] = messages.map((message) => ({
+    role: message.role === 'assistant' ? 'model' : 'user',
+    parts: [{ text: message.content }],
+  }));
+
+  const body = {
+    ...(systemPrompt
+      ? { systemInstruction: { parts: [{ text: systemPrompt }] } }
+      : {}),
+    contents,
+    generationConfig: { maxOutputTokens: maxTokens },
+  };
+
+  const url = `${GEMINI_BASE_URL}/${modelName(GEMINI_TEXT_MODEL)}:streamGenerateContent?alt=sse`;
+  const response = await fetch(url, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'x-goog-api-key': process.env.GEMINI_API_KEY!,
+    },
+    body: JSON.stringify(body),
+    cache: 'no-store',
+  });
+
+  if (!response.ok) {
+    const text = await response.text();
+    throw new Error(`Gemini streaming error ${response.status}: ${text}`);
+  }
+
+  const reader = response.body!.getReader();
+  const decoder = new TextDecoder();
+  let fullText = '';
+  let buffer = '';
+
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+
+    buffer += decoder.decode(value, { stream: true });
+    const lines = buffer.split('\n');
+    buffer = lines.pop() ?? '';
+
+    for (const line of lines) {
+      if (!line.startsWith('data: ')) continue;
+      const raw = line.slice(6).trim();
+      if (raw === '[DONE]') continue;
+      try {
+        const data = JSON.parse(raw);
+        const text = data.candidates?.[0]?.content?.parts
+          ?.map((p: { text?: string }) => p.text ?? '')
+          .join('') ?? '';
+        if (text) {
+          fullText += text;
+          onToken(text);
+        }
+      } catch {
+        // skip malformed chunks
+      }
+    }
+  }
+
+  if (!fullText) throw new Error('Empty streaming response from Gemini');
+  return fullText;
+}
+
 export async function generateGeminiEmbedding(text: string): Promise<number[]> {
   const data = await postGemini<EmbedContentResponse>(
     GEMINI_EMBEDDING_MODEL,

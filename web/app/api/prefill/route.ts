@@ -100,41 +100,22 @@ ${readmeText ? `\nProfile README:\n${readmeText}` : ""}
 // ─── Generic URL scraper ─────────────────────────────────────────────────────
 
 async function fetchUrlData(url: string): Promise<string> {
-  const res = await fetch(url, {
+  const jinaUrl = `https://r.jina.ai/${url}`;
+  const res = await fetch(jinaUrl, {
     headers: {
-      "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-      Accept: "text/html,application/xhtml+xml",
+      "Accept": "text/plain",
+      "User-Agent": "kuzana-connector",
     },
-    signal: AbortSignal.timeout(10_000),
-    redirect: "follow",
+    signal: AbortSignal.timeout(15_000),
   });
 
   if (!res.ok) {
     throw new Error(
-      `Could not load that page (HTTP ${res.status}). Try your GitHub username or paste a public portfolio URL.`
+      `Could not load that page (HTTP ${res.status}). Try your GitHub username or a public portfolio URL.`
     );
   }
 
-  const html = await res.text();
-
-  // Check if we got a meaningful page or a login wall
-  if (html.length < 500 || html.includes("enable JavaScript") || html.includes("sign in to continue")) {
-    throw new Error(
-      "That page requires a login or JavaScript to load. Try your GitHub username or a static portfolio URL."
-    );
-  }
-
-  const text = html
-    .replace(/<script[\s\S]*?<\/script>/gi, " ")
-    .replace(/<style[\s\S]*?<\/style>/gi, " ")
-    .replace(/<nav[\s\S]*?<\/nav>/gi, " ")
-    .replace(/<footer[\s\S]*?<\/footer>/gi, " ")
-    .replace(/<[^>]+>/g, " ")
-    .replace(/&amp;/g, "&").replace(/&lt;/g, "<").replace(/&gt;/g, ">")
-    .replace(/&quot;/g, '"').replace(/&nbsp;/g, " ")
-    .replace(/\s+/g, " ")
-    .trim()
-    .slice(0, 4000);
+  const text = await res.text();
 
   if (text.length < 200) {
     throw new Error(
@@ -142,7 +123,7 @@ async function fetchUrlData(url: string): Promise<string> {
     );
   }
 
-  return `URL: ${url}\n\n${text}`;
+  return `URL: ${url}\n\n${text.slice(0, 4000)}`;
 }
 
 // ─── Gemini extraction ───────────────────────────────────────────────────────
