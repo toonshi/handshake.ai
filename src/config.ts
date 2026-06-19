@@ -32,14 +32,11 @@ export const config = {
   telegram: {
     token: required('TELEGRAM_BOT_TOKEN'),
   },
-  anthropic: {
-    apiKey: required('ANTHROPIC_API_KEY'),
-    model: 'claude-sonnet-4-6' as const,
-  },
-  openai: {
-    apiKey: required('OPENAI_API_KEY'),
-    embeddingModel: 'text-embedding-3-small' as const,
-    embeddingDimensions: 1536,
+  google: {
+    apiKey: required('GOOGLE_AI_API_KEY'),
+    model: 'gemini-1.5-flash' as const,
+    embeddingModel: 'text-embedding-004' as const,
+    embeddingDimensions: 768,
   },
   supabase: {
     url: required('SUPABASE_URL'),

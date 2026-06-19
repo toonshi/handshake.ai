@@ -13,8 +13,8 @@ create table if not exists users (
   goals text not null,
   challenges text not null,
   offers text not null,
-  goal_embedding vector(1536),
-  challenge_embedding vector(1536),
+  goal_embedding vector(768),
+  challenge_embedding vector(768),
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
@@ -74,7 +74,7 @@ create trigger matches_updated_at
 
 -- pgvector similarity search: match User A's goal embedding against other users' challenge embeddings
 create or replace function match_profiles(
-  query_embedding vector(1536),
+  query_embedding vector(768),
   match_threshold float,
   match_count int,
   exclude_user_id uuid

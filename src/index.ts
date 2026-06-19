@@ -9,7 +9,7 @@ async function main(): Promise<void> {
   // Validate config early
   const { config } = await import('./config');
   console.log(`[Config] Telegram bot token: ...${config.telegram.token.slice(-6)}`);
-  console.log(`[Config] Claude model: ${config.anthropic.model}`);
+  console.log(`[Config] Gemini model: ${config.google.model}`);
   console.log(`[Config] Match threshold: ${config.matching.scoreThreshold}`);
   console.log(`[Config] Matching cron: ${config.matching.cronSchedule}`);
   console.log('');

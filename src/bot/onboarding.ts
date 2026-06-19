@@ -1,19 +1,19 @@
-import Anthropic from '@anthropic-ai/sdk';
+import { GoogleGenerativeAI } from '@google/generative-ai';
 import { config } from '../config';
 import { OnboardingSession, ProfileData } from '../types';
 
-let _anthropic: Anthropic | null = null;
+let _genai: GoogleGenerativeAI | null = null;
 
-function getAnthropic(): Anthropic {
-  if (!_anthropic) {
-    _anthropic = new Anthropic({ apiKey: config.anthropic.apiKey });
+function getGenAI(): GoogleGenerativeAI {
+  if (!_genai) {
+    _genai = new GoogleGenerativeAI(config.google.apiKey);
   }
-  return _anthropic;
+  return _genai;
 }
 
 const INTERVIEWER_SYSTEM = `You are the Kuzana Connector onboarding assistant. You're conducting a brief, friendly interview to build someone's profile for an AI-powered networking system at MiniHack Kenya.
 
-You need to collect these 5 pieces of information (in order):
+You need to collect these 6 pieces of information (in order):
 1. Their name
 2. Their role (e.g., founder, developer, investor, mentor, designer)
 3. What they're building or working on (2-3 sentences)
@@ -41,34 +41,33 @@ export async function conductInterview(
   session: OnboardingSession,
   userMessage: string
 ): Promise<InterviewResult> {
-  const anthropic = getAnthropic();
-
-  const updatedHistory = [
-    ...session.history,
-    { role: 'user' as const, content: userMessage },
-  ];
-
-  const response = await anthropic.messages.create({
-    model: config.anthropic.model,
-    max_tokens: 300,
-    system: INTERVIEWER_SYSTEM,
-    messages: updatedHistory,
+  const genai = getGenAI();
+  const model = genai.getGenerativeModel({
+    model: config.google.model,
+    systemInstruction: INTERVIEWER_SYSTEM,
   });
 
-  const block = response.content[0];
-  if (block.type !== 'text') throw new Error('Unexpected Claude response');
+  // Convert history to Gemini format (all but build fresh with user message appended)
+  const history = session.history.map((m) => ({
+    role: m.role === 'assistant' ? 'model' : 'user',
+    parts: [{ text: m.content }],
+  }));
 
-  const text = block.text.trim();
+  const chat = model.startChat({
+    history,
+    generationConfig: { maxOutputTokens: 300 },
+  });
+
+  const result = await chat.sendMessage(userMessage);
+  const text = result.response.text().trim();
+
   const isComplete = text.includes('[PROFILE_COMPLETE]');
   const cleanResponse = text.replace('[PROFILE_COMPLETE]', '').trim();
 
-  return {
-    response: cleanResponse,
-    isComplete,
-  };
+  return { response: cleanResponse, isComplete };
 }
 
-const EXTRACTOR_SYSTEM = `Extract structured profile data from this conversation. Return valid JSON only (no markdown, no code blocks):
+const EXTRACTOR_SYSTEM = `Extract structured profile data from this onboarding conversation. Return valid JSON only (no markdown, no code blocks):
 
 {
   "name": "person's full name",
@@ -84,27 +83,21 @@ If any field is unclear, use your best inference from context. All fields are re
 export async function extractProfileFromHistory(
   history: Array<{ role: 'user' | 'assistant'; content: string }>
 ): Promise<ProfileData> {
-  const anthropic = getAnthropic();
+  const genai = getGenAI();
+  const model = genai.getGenerativeModel({
+    model: config.google.model,
+    systemInstruction: EXTRACTOR_SYSTEM,
+  });
 
   const conversationText = history
     .map((m) => `${m.role === 'user' ? 'User' : 'Interviewer'}: ${m.content}`)
     .join('\n\n');
 
-  const response = await anthropic.messages.create({
-    model: config.anthropic.model,
-    max_tokens: 500,
-    messages: [
-      {
-        role: 'user',
-        content: `${EXTRACTOR_SYSTEM}\n\nConversation:\n${conversationText}`,
-      },
-    ],
-  });
-
-  const block = response.content[0];
-  if (block.type !== 'text') throw new Error('Unexpected Claude response');
-
-  const cleaned = block.text.replace(/```(?:json)?\n?/g, '').replace(/```/g, '').trim();
+  const result = await model.generateContent(
+    `Extract the profile from this conversation:\n\n${conversationText}`
+  );
+  const text = result.response.text().trim();
+  const cleaned = text.replace(/```(?:json)?\n?/g, '').replace(/```/g, '').trim();
 
   try {
     return JSON.parse(cleaned) as ProfileData;

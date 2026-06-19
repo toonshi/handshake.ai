@@ -1,23 +1,20 @@
-import OpenAI from 'openai';
+import { GoogleGenerativeAI } from '@google/generative-ai';
 import { config } from '../config';
 
-let _openai: OpenAI | null = null;
+let _genai: GoogleGenerativeAI | null = null;
 
-function getOpenAI(): OpenAI {
-  if (!_openai) {
-    _openai = new OpenAI({ apiKey: config.openai.apiKey });
+function getGenAI(): GoogleGenerativeAI {
+  if (!_genai) {
+    _genai = new GoogleGenerativeAI(config.google.apiKey);
   }
-  return _openai;
+  return _genai;
 }
 
 export async function generateEmbedding(text: string): Promise<number[]> {
-  const openai = getOpenAI();
-  const response = await openai.embeddings.create({
-    model: config.openai.embeddingModel,
-    input: text,
-    dimensions: config.openai.embeddingDimensions,
-  });
-  return response.data[0].embedding;
+  const genai = getGenAI();
+  const model = genai.getGenerativeModel({ model: config.google.embeddingModel });
+  const result = await model.embedContent(text);
+  return result.embedding.values;
 }
 
 export async function generateUserEmbeddings(
