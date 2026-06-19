@@ -25,6 +25,7 @@ interface FormData {
   github_username: string;
   website_url: string;
   phone_number: string;
+  wallet_address: string;
   resume: File | null;
 }
 
@@ -48,6 +49,7 @@ export default function RegistrationForm() {
     github_username: "",
     website_url: "",
     phone_number: "",
+    wallet_address: "",
     resume: null,
   });
   const [status, setStatus] = useState<Status>("idle");
@@ -331,6 +333,15 @@ export default function RegistrationForm() {
             value={form.phone_number}
             onChange={set("phone_number")}
             type="tel"
+          />
+        </Field>
+
+        <Field label="Avalanche wallet address" hint="Optional — for tips and project support">
+          <input
+            className="input"
+            placeholder="0x..."
+            value={form.wallet_address}
+            onChange={set("wallet_address")}
           />
         </Field>
       </section>

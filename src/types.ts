@@ -3,6 +3,7 @@ export interface User {
   telegram_id: number;
   telegram_username?: string;
   phone_number?: string;
+  wallet_address?: string;
   accept_all_matches: boolean;
   name: string;
   role: string;

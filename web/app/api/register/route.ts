@@ -78,6 +78,7 @@ export async function POST(req: NextRequest) {
     const github_username = form.get("github_username")?.toString().trim();
     const website_url = form.get("website_url")?.toString().trim();
     const phone_number = form.get("phone_number")?.toString().trim();
+    const wallet_address = form.get("wallet_address")?.toString().trim();
 
     if (!name || !telegram_username || !role || !description || !goals || !challenges || !offers) {
       return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
@@ -142,6 +143,7 @@ export async function POST(req: NextRequest) {
         telegram_id: placeholderTelegramId,
         telegram_username,
         phone_number: phone_number || null,
+        wallet_address: wallet_address || null,
         name,
         role,
         description,

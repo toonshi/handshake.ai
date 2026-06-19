@@ -7,6 +7,7 @@ create table if not exists users (
   telegram_id bigint unique not null,
   telegram_username text,
   phone_number text,
+  wallet_address text,
   accept_all_matches boolean not null default false,
   name text not null,
   role text not null,
