@@ -54,6 +54,27 @@ export function createBot(): TelegramBot {
         return;
       }
 
+      // Check if registered via web form (placeholder telegram_id, matched by username)
+      if (msg.from?.username) {
+        const db = getSupabase();
+        const { data: webUser } = await db
+          .from('users')
+          .select('*')
+          .eq('telegram_username', msg.from.username)
+          .lt('telegram_id', 0) // web-registered users have negative placeholder IDs
+          .single();
+
+        if (webUser) {
+          await db.from('users').update({ telegram_id: telegramId }).eq('id', webUser.id);
+          await bot.sendMessage(
+            chatId,
+            `✅ *Linked! Welcome ${webUser.name}.*\n\nYour web profile is now connected. Your agent is active — I'll message you when it finds a match.`,
+            { parse_mode: 'Markdown' }
+          );
+          return;
+        }
+      }
+
       const session: OnboardingSession = { step: 'greeting', history: [], data: {} };
       sessions.set(telegramId, session);
 

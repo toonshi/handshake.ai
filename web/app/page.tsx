@@ -1,0 +1,92 @@
+import RegistrationForm from "@/components/registration-form";
+
+export default function Home() {
+  return (
+    <main className="min-h-screen px-4 py-12 sm:py-20">
+      <div className="max-w-xl mx-auto space-y-12">
+
+        {/* Header */}
+        <header className="space-y-4">
+          <div className="inline-flex items-center gap-2 text-xs font-mono text-[#52525b] border border-[#27272a] rounded-full px-3 py-1.5">
+            <span className="w-1.5 h-1.5 rounded-full bg-[#4ade80] animate-pulse inline-block" />
+            MiniHack Kenya · Kuzana Connector
+          </div>
+
+          <div className="space-y-3">
+            <h1 className="text-3xl sm:text-4xl font-semibold tracking-tight text-white leading-tight">
+              Your agent works the room
+              <br />
+              <span className="text-[#71717a]">so you don&apos;t have to.</span>
+            </h1>
+            <p className="text-[#a1a1aa] text-base leading-relaxed">
+              We build you an AI agent from your profile. It negotiates introductions
+              with every other agent in the community. When it finds a match,{" "}
+              <span className="text-white">your phone rings.</span>
+            </p>
+          </div>
+
+          <div className="grid grid-cols-3 gap-3 pt-2">
+            {[
+              { step: "01", label: "Fill in this form" },
+              { step: "02", label: "Agent negotiates matches" },
+              { step: "03", label: "You get called" },
+            ].map(({ step, label }) => (
+              <div
+                key={step}
+                className="border border-[#27272a] rounded-xl p-3 bg-[#111111]"
+              >
+                <p className="font-mono text-[10px] text-[#52525b] mb-1">{step}</p>
+                <p className="text-xs text-[#a1a1aa] leading-tight">{label}</p>
+              </div>
+            ))}
+          </div>
+        </header>
+
+        {/* Form card */}
+        <div className="border border-[#27272a] rounded-2xl bg-[#111111] p-6 sm:p-8">
+          <RegistrationForm />
+        </div>
+
+        {/* Hackathon submission */}
+        <section className="space-y-5">
+          <div className="border border-[#27272a] rounded-xl overflow-hidden">
+            <div className="px-5 py-3 border-b border-[#27272a] bg-[#111111]">
+              <p className="text-xs font-mono text-[#52525b] uppercase tracking-widest">
+                Hackathon Submission
+              </p>
+            </div>
+
+            <div className="divide-y divide-[#18181b]">
+              <SubmissionItem
+                q="Which bounty are you building for?"
+                a="Boardy.ai for Kuzana — an AI-powered matchmaking connector for the MiniHack Kenya community."
+              />
+              <SubmissionItem
+                q="In 5 sentences, what is the core problem and why did you choose it?"
+                a="MiniHack Kenya brings together founders, developers, investors, and mentors — but high-value connections happen by accident rather than by design. Nobody at the event has enough context to broker the right introductions, and the people who could make them don't know enough to make them well. We chose this because the opportunity cost of a missed connection at a hackathon is enormous — a co-founder meeting or investor conversation can change the trajectory of a project. Existing solutions like Boardy.ai work at scale; this community is small and high-trust, where every introduction carries real weight and a bad one destroys credibility. We built agent-to-agent negotiation specifically for this context: small community, high stakes, depth over breadth."
+              />
+              <SubmissionItem
+                q="How does Avalanche infrastructure (smart contracts, USDC, embedded wallets, AA) make your solution better than a Web2 approach?"
+                a="Embedded wallets (via Dynamic) let users onboard without ever touching a wallet UI, while creating a portable on-chain identity that carries reputation across every future Kuzana event. Match quality ratings stored on Avalanche are tamper-proof and portable — a user's track record follows them forever, not siloed in one app. USDC on Avalanche enables introduction bounties — a founder stakes $5 on a connection request, paid to the connector when the intro leads to a verified meeting, creating a real market for quality human networks. Account Abstraction makes gas fees invisible (platform-sponsored), removing the last barrier for East African users unfamiliar with crypto. Smart contract escrow adds accountability — both parties sign an on-chain commitment to connect within 48 hours, dramatically improving follow-through beyond what any Web2 nudge achieves."
+              />
+            </div>
+          </div>
+        </section>
+
+        {/* Footer */}
+        <footer className="text-center text-xs text-[#3f3f46] pb-4">
+          Built for MiniHack · Kuzana ecosystem · Kenya
+        </footer>
+      </div>
+    </main>
+  );
+}
+
+function SubmissionItem({ q, a }: { q: string; a: string }) {
+  return (
+    <div className="px-5 py-4 space-y-2">
+      <p className="text-xs text-[#71717a] font-medium">→ {q}</p>
+      <p className="text-sm text-[#a1a1aa] leading-relaxed">{a}</p>
+    </div>
+  );
+}
