@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { generateGeminiEmbedding, generateGeminiText } from "@/lib/gemini";
+import { updateUserEnrichments } from "@/lib/db";
+import type { ProfileEnrichments } from "@/lib/types";
 
 function getSupabase() {
   return createClient(
@@ -102,13 +104,13 @@ export async function POST(req: NextRequest) {
 
     // Gather enrichment context for embedding
     const enrichmentParts: string[] = [];
-    const enrichments: Record<string, unknown> = { websites: [] };
+    const enrichments: ProfileEnrichments = { websites: [] };
 
     if (github_username) {
       const summary = await fetchGitHubSummary(github_username);
       if (summary) {
         enrichmentParts.push(summary);
-        enrichments.github = { username: github_username, fetchedAt: new Date().toISOString() };
+        enrichments.github = { username: github_username, fetchedAt: new Date().toISOString() } as ProfileEnrichments["github"];
       }
     }
 
@@ -116,11 +118,11 @@ export async function POST(req: NextRequest) {
       const summary = await scrapeWebsite(website_url);
       if (summary) {
         enrichmentParts.push(summary);
-        (enrichments.websites as unknown[]).push({
+        enrichments.websites.push({
           url: website_url,
           summary,
           fetchedAt: new Date().toISOString(),
-        });
+        } as ProfileEnrichments["websites"][number]);
       }
     }
 
@@ -150,7 +152,6 @@ export async function POST(req: NextRequest) {
         goals,
         challenges,
         offers,
-        enrichments,
         goal_embedding: goalEmbedding,
         challenge_embedding: challengeEmbedding,
       })
@@ -160,6 +161,12 @@ export async function POST(req: NextRequest) {
     if (error) {
       console.error("[register]", error);
       return NextResponse.json({ error: error.message }, { status: 500 });
+    }
+
+    if (Object.keys(enrichments).length > 1) {
+      await updateUserEnrichments(user.id, enrichments).catch(() => {
+        // Best effort only. If the column does not exist yet, registration still succeeds.
+      });
     }
 
     return NextResponse.json({ success: true, userId: user.id });

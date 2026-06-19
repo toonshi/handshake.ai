@@ -69,7 +69,7 @@ export default function RegistrationForm() {
       });
       const data = await res.json() as PrefillResult & { error?: string };
 
-      if (!res.ok) throw new Error(data.error ?? "Failed to fetch profile");
+      if (!res.ok || data.error) throw new Error(data.error ?? "Failed to fetch profile");
 
       setForm((f) => ({
         ...f,

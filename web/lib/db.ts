@@ -66,7 +66,10 @@ export async function updateUserEnrichments(
     .from('users')
     .update({ enrichments })
     .eq('id', userId);
-  if (error) throw new Error(`Failed to update enrichments: ${error.message}`);
+  if (error) {
+    if (error.code === 'PGRST204') return;
+    throw new Error(`Failed to update enrichments: ${error.message}`);
+  }
 }
 
 export async function updateUserEmbeddings(

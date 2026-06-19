@@ -174,7 +174,7 @@ export async function POST(req: NextRequest) {
     const { input } = await req.json() as { input: string };
 
     if (!input?.trim()) {
-      return NextResponse.json({ error: "No input provided" }, { status: 400 });
+      return NextResponse.json({ error: "No input provided" });
     }
 
     const trimmed = input.trim();
@@ -225,6 +225,6 @@ export async function POST(req: NextRequest) {
     return NextResponse.json(result);
   } catch (err) {
     const message = err instanceof Error ? err.message : "Failed to fetch profile";
-    return NextResponse.json({ error: message }, { status: 400 });
+    return NextResponse.json({ error: message });
   }
 }
