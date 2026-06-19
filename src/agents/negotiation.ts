@@ -1,6 +1,5 @@
-import Anthropic from '@anthropic-ai/sdk';
-import { config } from '../config';
 import { User, NegotiationResult, AgentTurn, AgentScore } from '../types';
+import { generateGeminiText } from '../utils/gemini';
 import {
   buildAgentSystemPrompt,
   buildNegotiationTurn1Prompt,
@@ -8,30 +7,12 @@ import {
   buildScoringPrompt,
 } from './prompts';
 
-let _anthropic: Anthropic | null = null;
-
-function getAnthropic(): Anthropic {
-  if (!_anthropic) {
-    _anthropic = new Anthropic({ apiKey: config.anthropic.apiKey });
-  }
-  return _anthropic;
-}
-
-async function callClaude(
+async function callGemini(
   systemPrompt: string,
   messages: Array<{ role: 'user' | 'assistant'; content: string }>,
   maxTokens = 500
 ): Promise<string> {
-  const anthropic = getAnthropic();
-  const response = await anthropic.messages.create({
-    model: config.anthropic.model,
-    max_tokens: maxTokens,
-    system: systemPrompt,
-    messages,
-  });
-  const block = response.content[0];
-  if (block.type !== 'text') throw new Error('Unexpected response type from Claude');
-  return block.text.trim();
+  return generateGeminiText(systemPrompt, messages, maxTokens);
 }
 
 function parseAgentScore(raw: string): AgentScore {
@@ -66,14 +47,14 @@ export async function runAgentNegotiation(
 
   // Turn 1: Agent A introduces and asks
   const turn1Prompt = buildNegotiationTurn1Prompt(userA, userB);
-  const turn1 = await callClaude(agentASystem, [
+  const turn1 = await callGemini(agentASystem, [
     { role: 'user', content: turn1Prompt },
   ]);
   transcript.push({ agent: 'A', content: turn1 });
 
   // Turn 2: Agent B responds
   const turn2Prompt = buildNegotiationTurn2Prompt(userB);
-  const turn2 = await callClaude(agentBSystem, [
+  const turn2 = await callGemini(agentBSystem, [
     {
       role: 'user',
       content: `Agent A (representing ${userA.name}) says:\n\n${turn1}\n\n${turn2Prompt}`,
@@ -86,10 +67,10 @@ export async function runAgentNegotiation(
 
   // Turn 3: Independent scoring from both agents
   const [scoreARaw, scoreBRaw] = await Promise.all([
-    callClaude(agentASystem, [
+    callGemini(agentASystem, [
       { role: 'user', content: `${conversationContext}\n\n${buildScoringPrompt(userA, userB)}` },
     ], 400),
-    callClaude(agentBSystem, [
+    callGemini(agentBSystem, [
       { role: 'user', content: `${conversationContext}\n\n${buildScoringPrompt(userB, userA)}` },
     ], 400),
   ]);

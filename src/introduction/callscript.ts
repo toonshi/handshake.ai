@@ -1,23 +1,11 @@
-import Anthropic from '@anthropic-ai/sdk';
-import { config } from '../config';
 import { User, Match, CallScript } from '../types';
-
-let _anthropic: Anthropic | null = null;
-
-function getAnthropic(): Anthropic {
-  if (!_anthropic) {
-    _anthropic = new Anthropic({ apiKey: config.anthropic.apiKey });
-  }
-  return _anthropic;
-}
+import { generateGeminiText } from '../utils/gemini';
 
 export async function generateCallScripts(
   match: Match,
   userA: User,
   userB: User
 ): Promise<CallScript> {
-  const anthropic = getAnthropic();
-
   const context = `
 Match details:
 - Person A: ${userA.name} (${userA.role})
@@ -52,16 +40,8 @@ Return as JSON (no markdown):
   "personBScript": "script for calling ${userB.name}"
 }`;
 
-  const response = await anthropic.messages.create({
-    model: config.anthropic.model,
-    max_tokens: 400,
-    messages: [{ role: 'user', content: prompt }],
-  });
-
-  const block = response.content[0];
-  if (block.type !== 'text') throw new Error('Unexpected Claude response');
-
-  const cleaned = block.text.replace(/```(?:json)?\n?/g, '').replace(/```/g, '').trim();
+  const text = await generateGeminiText('', [{ role: 'user', content: prompt }], 400);
+  const cleaned = text.replace(/```(?:json)?\n?/g, '').replace(/```/g, '').trim();
 
   try {
     return JSON.parse(cleaned) as CallScript;
