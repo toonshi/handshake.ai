@@ -13,10 +13,27 @@ export interface PrefillResult {
   source: string;
 }
 
+// ─── LinkedIn / social network detection ────────────────────────────────────
+
+const BLOCKED_DOMAINS = [
+  "linkedin.com",
+  "twitter.com",
+  "x.com",
+  "instagram.com",
+  "facebook.com",
+  "tiktok.com",
+];
+
+function isBlockedDomain(url: string): string | null {
+  for (const domain of BLOCKED_DOMAINS) {
+    if (url.includes(domain)) return domain;
+  }
+  return null;
+}
+
 // ─── GitHub ──────────────────────────────────────────────────────────────────
 
 function extractGitHubUsername(input: string): string | null {
-  // Accept "torvalds", "github.com/torvalds", "https://github.com/torvalds"
   const urlMatch = input.match(/github\.com\/([a-zA-Z0-9_-]+)/);
   if (urlMatch) return urlMatch[1];
   if (/^[a-zA-Z0-9_-]+$/.test(input.trim())) return input.trim();
@@ -24,7 +41,13 @@ function extractGitHubUsername(input: string): string | null {
 }
 
 async function fetchGitHubData(username: string): Promise<string> {
-  const headers = { "User-Agent": "kuzana-connector", Accept: "application/vnd.github.v3+json" };
+  const token = process.env.GITHUB_TOKEN;
+  const headers: Record<string, string> = {
+    "User-Agent": "kuzana-connector",
+    Accept: "application/vnd.github.v3+json",
+  };
+  if (token) headers["Authorization"] = `Bearer ${token}`;
+
   const [userRes, reposRes, readmeRes] = await Promise.allSettled([
     fetch(`https://api.github.com/users/${encodeURIComponent(username)}`, { headers }),
     fetch(`https://api.github.com/users/${encodeURIComponent(username)}/repos?sort=stars&per_page=8&type=owner`, { headers }),
@@ -32,14 +55,16 @@ async function fetchGitHubData(username: string): Promise<string> {
   ]);
 
   if (userRes.status === "rejected" || !userRes.value.ok) {
-    throw new Error(`GitHub user "${username}" not found`);
+    if (userRes.status === "fulfilled" && userRes.value.status === 403) {
+      throw new Error("GitHub rate limit hit. Add a GITHUB_TOKEN env var or try again later.");
+    }
+    throw new Error(`GitHub user "@${username}" not found.`);
   }
 
   const user = await userRes.value.json();
   const repos = reposRes.status === "fulfilled" && reposRes.value.ok
     ? await reposRes.value.json() : [];
 
-  // Try to get profile README
   let readmeText = "";
   if (readmeRes.status === "fulfilled" && readmeRes.value.ok) {
     try {
@@ -77,15 +102,28 @@ ${readmeText ? `\nProfile README:\n${readmeText}` : ""}
 async function fetchUrlData(url: string): Promise<string> {
   const res = await fetch(url, {
     headers: {
-      "User-Agent": "Mozilla/5.0 (compatible; KuzanaConnector/1.0)",
+      "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
       Accept: "text/html,application/xhtml+xml",
     },
     signal: AbortSignal.timeout(10_000),
+    redirect: "follow",
   });
 
-  if (!res.ok) throw new Error(`Could not fetch ${url} (HTTP ${res.status})`);
+  if (!res.ok) {
+    throw new Error(
+      `Could not load that page (HTTP ${res.status}). Try your GitHub username or paste a public portfolio URL.`
+    );
+  }
 
   const html = await res.text();
+
+  // Check if we got a meaningful page or a login wall
+  if (html.length < 500 || html.includes("enable JavaScript") || html.includes("sign in to continue")) {
+    throw new Error(
+      "That page requires a login or JavaScript to load. Try your GitHub username or a static portfolio URL."
+    );
+  }
+
   const text = html
     .replace(/<script[\s\S]*?<\/script>/gi, " ")
     .replace(/<style[\s\S]*?<\/style>/gi, " ")
@@ -97,6 +135,12 @@ async function fetchUrlData(url: string): Promise<string> {
     .replace(/\s+/g, " ")
     .trim()
     .slice(0, 4000);
+
+  if (text.length < 200) {
+    throw new Error(
+      "Couldn't extract enough content from that URL. Try your GitHub username or a different public portfolio link."
+    );
+  }
 
   return `URL: ${url}\n\n${text}`;
 }
@@ -153,12 +197,23 @@ export async function POST(req: NextRequest) {
     }
 
     const trimmed = input.trim();
+
+    // Block LinkedIn and other social networks upfront with a clear message
+    const blocked = isBlockedDomain(trimmed);
+    if (blocked) {
+      return NextResponse.json(
+        {
+          error: `${blocked} blocks automated access — it's not possible to read profiles there. Paste your GitHub username, personal website, or portfolio URL instead.`,
+        },
+        { status: 400 }
+      );
+    }
+
     let profileData: string;
     let github_username: string | undefined;
     let website_url: string | undefined;
     let source: string;
 
-    // Detect GitHub
     const ghUsername = extractGitHubUsername(trimmed);
     const isGitHubUrl = trimmed.includes("github.com/");
     const isPlainUsername = /^[a-zA-Z0-9_-]+$/.test(trimmed) && !trimmed.includes(".");
@@ -168,7 +223,6 @@ export async function POST(req: NextRequest) {
       github_username = ghUsername;
       source = `github.com/${ghUsername}`;
     } else {
-      // Treat as URL
       let url = trimmed;
       if (!url.startsWith("http://") && !url.startsWith("https://")) {
         url = "https://" + url;

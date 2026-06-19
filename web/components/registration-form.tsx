@@ -161,7 +161,7 @@ export default function RegistrationForm() {
         <div className="space-y-1">
           <p className="text-sm font-semibold text-white">Import from a profile</p>
           <p className="text-xs text-[#71717a]">
-            Paste your GitHub username, LinkedIn, portfolio, or any URL — we&apos;ll fill in the form for you.
+            Paste your GitHub username or portfolio URL — we&apos;ll fill in the form for you. (LinkedIn blocks automated access.)
           </p>
         </div>
 
@@ -169,7 +169,7 @@ export default function RegistrationForm() {
           <input
             type="text"
             className="input flex-1"
-            placeholder="github.com/you  ·  linkedin.com/in/you  ·  yoursite.com"
+            placeholder="github.com/you  ·  yoursite.com  ·  or just: yourusername"
             value={prefillInput}
             onChange={(e) => {
               setPrefillInput(e.target.value);
