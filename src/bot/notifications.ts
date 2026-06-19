@@ -258,7 +258,7 @@ export async function initiateCallsForMatch(match: Match): Promise<void> {
   const telegramMessageA = `📞 *The intro is confirmed!*
 
 Here's ${userB.name}'s info:
-${userB.telegram_username ? `Telegram: @${userB.telegram_username}` : 'No username — ask me if you need help connecting'}
+${userB.telegram_username ? `Telegram: @${userB.telegram_username}` : 'No username — ask me if you need help connecting'}${userB.wallet_address ? `\nAVAX wallet: \`${userB.wallet_address}\`` : ''}
 
 💬 *Open with:*
 _"${match.conversation_starter}"_
@@ -268,7 +268,7 @@ ${userA.phone_number ? 'We\'ll call you shortly with a full briefing.' : 'Add yo
   const telegramMessageB = `📞 *The intro is confirmed!*
 
 Here's ${userA.name}'s info:
-${userA.telegram_username ? `Telegram: @${userA.telegram_username}` : 'No username — ask me if you need help connecting'}
+${userA.telegram_username ? `Telegram: @${userA.telegram_username}` : 'No username — ask me if you need help connecting'}${userA.wallet_address ? `\nAVAX wallet: \`${userA.wallet_address}\`` : ''}
 
 💬 *Open with:*
 _"${match.conversation_starter}"_
