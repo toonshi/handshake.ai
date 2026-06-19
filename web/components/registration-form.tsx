@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useRef } from "react";
+import type { PrefillResult } from "@/app/api/prefill/route";
 
 const ROLES = [
   "Founder / Co-founder",
@@ -28,8 +29,14 @@ interface FormData {
 }
 
 type Status = "idle" | "loading" | "success" | "error";
+type PrefillStatus = "idle" | "loading" | "done" | "error";
 
 export default function RegistrationForm() {
+  const [prefillInput, setPrefillInput] = useState("");
+  const [prefillStatus, setPrefillStatus] = useState<PrefillStatus>("idle");
+  const [prefillError, setPrefillError] = useState("");
+  const [prefillSource, setPrefillSource] = useState("");
+
   const [form, setForm] = useState<FormData>({
     name: "",
     telegram_username: "",
@@ -46,6 +53,41 @@ export default function RegistrationForm() {
   const [status, setStatus] = useState<Status>("idle");
   const [errorMsg, setErrorMsg] = useState("");
   const fileRef = useRef<HTMLInputElement>(null);
+
+  async function handlePrefill() {
+    if (!prefillInput.trim()) return;
+    setPrefillStatus("loading");
+    setPrefillError("");
+
+    try {
+      const res = await fetch("/api/prefill", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ input: prefillInput.trim() }),
+      });
+      const data = await res.json() as PrefillResult & { error?: string };
+
+      if (!res.ok) throw new Error(data.error ?? "Failed to fetch profile");
+
+      setForm((f) => ({
+        ...f,
+        name: data.name || f.name,
+        role: data.role || f.role,
+        description: data.description || f.description,
+        goals: data.goals || f.goals,
+        challenges: data.challenges || f.challenges,
+        offers: data.offers || f.offers,
+        github_username: data.github_username || f.github_username,
+        website_url: data.website_url || f.website_url,
+      }));
+
+      setPrefillSource(data.source);
+      setPrefillStatus("done");
+    } catch (err) {
+      setPrefillError(err instanceof Error ? err.message : "Failed to fetch profile");
+      setPrefillStatus("error");
+    }
+  }
 
   const set = (key: keyof FormData) => (
     e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>
@@ -111,6 +153,59 @@ export default function RegistrationForm() {
 
   return (
     <form onSubmit={handleSubmit} className="space-y-8">
+
+      {/* Quick-fill from social profile */}
+      <section className="space-y-3">
+        <div className="space-y-1">
+          <p className="text-sm font-semibold text-white">Import from a profile</p>
+          <p className="text-xs text-[#71717a]">
+            Paste your GitHub username, LinkedIn, portfolio, or any URL — we&apos;ll fill in the form for you.
+          </p>
+        </div>
+
+        <div className="flex gap-2">
+          <input
+            type="text"
+            className="input flex-1"
+            placeholder="github.com/you  ·  linkedin.com/in/you  ·  yoursite.com"
+            value={prefillInput}
+            onChange={(e) => {
+              setPrefillInput(e.target.value);
+              if (prefillStatus !== "idle") setPrefillStatus("idle");
+            }}
+            onKeyDown={(e) => e.key === "Enter" && (e.preventDefault(), handlePrefill())}
+            disabled={prefillStatus === "loading"}
+          />
+          <button
+            type="button"
+            onClick={handlePrefill}
+            disabled={prefillStatus === "loading" || !prefillInput.trim()}
+            className="shrink-0 bg-[#18181b] border border-[#27272a] hover:border-[#3f3f46] text-white text-sm font-medium rounded-xl px-4 py-2 transition-colors disabled:opacity-40 disabled:cursor-not-allowed whitespace-nowrap"
+          >
+            {prefillStatus === "loading" ? (
+              <span className="flex items-center gap-1.5">
+                <span className="w-3 h-3 border border-[#52525b] border-t-white rounded-full animate-spin inline-block" />
+                Reading…
+              </span>
+            ) : "Import →"}
+          </button>
+        </div>
+
+        {prefillStatus === "done" && (
+          <div className="flex items-center gap-2 text-xs text-[#4ade80] bg-[#052e16] border border-[#166534] rounded-lg px-3 py-2">
+            <span>✓</span>
+            <span>Fields pre-filled from <span className="font-medium">{prefillSource}</span> — review and edit below.</span>
+          </div>
+        )}
+        {prefillStatus === "error" && (
+          <p className="text-xs text-[#f87171] bg-[#450a0a] border border-[#7f1d1d] rounded-lg px-3 py-2">
+            {prefillError}
+          </p>
+        )}
+      </section>
+
+      <Divider />
+
       {/* Section 1: Identity */}
       <section className="space-y-4">
         <SectionLabel number="01" title="Who are you?" />
