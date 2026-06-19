@@ -1,9 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { GoogleGenerativeAI } from "@google/generative-ai";
-
-function getGenAI() {
-  return new GoogleGenerativeAI(process.env.GEMINI_API_KEY!);
-}
+import { generateGeminiText } from "@/lib/gemini";
 
 export interface PrefillResult {
   name: string;
@@ -132,9 +128,11 @@ Profile data:
 `;
 
 async function extractWithGemini(profileData: string): Promise<Omit<PrefillResult, "github_username" | "website_url" | "source">> {
-  const model = getGenAI().getGenerativeModel({ model: "gemini-1.5-flash" });
-  const result = await model.generateContent(EXTRACTION_PROMPT + profileData);
-  const raw = result.response.text().trim();
+  const raw = await generateGeminiText(
+    "",
+    [{ role: "user", content: EXTRACTION_PROMPT + profileData }],
+    500
+  );
   const cleaned = raw.replace(/```(?:json)?\n?/g, "").replace(/```/g, "").trim();
 
   try {

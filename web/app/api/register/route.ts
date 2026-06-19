@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
-import { GoogleGenerativeAI } from "@google/generative-ai";
+import { generateGeminiEmbedding, generateGeminiText } from "@/lib/gemini";
 
 function getSupabase() {
   return createClient(
@@ -8,16 +8,6 @@ function getSupabase() {
     process.env.SUPABASE_SERVICE_KEY!,
     { auth: { persistSession: false } }
   );
-}
-
-function getGenAI() {
-  return new GoogleGenerativeAI(process.env.GEMINI_API_KEY!);
-}
-
-async function generateEmbedding(text: string): Promise<number[]> {
-  const model = getGenAI().getGenerativeModel({ model: "text-embedding-004" });
-  const result = await model.embedContent(text);
-  return result.embedding.values;
 }
 
 async function fetchGitHubSummary(username: string): Promise<string> {
@@ -63,11 +53,12 @@ async function scrapeWebsite(url: string): Promise<string> {
       .trim()
       .slice(0, 2000);
 
-    const model = getGenAI().getGenerativeModel({ model: "gemini-1.5-flash" });
-    const result = await model.generateContent(
-      `In 2 sentences, what does this person or company do?\n${text}`
+    const summary = await generateGeminiText(
+      "",
+      [{ role: "user", content: `In 2 sentences, what does this person or company do?\n${text}` }],
+      100
     );
-    return `Website (${url}): ${result.response.text().trim()}`;
+    return `Website (${url}): ${summary.trim()}`;
   } catch {
     return "";
   }
@@ -137,8 +128,8 @@ export async function POST(req: NextRequest) {
     const challengesText = [challenges, ...enrichmentParts].join(". ");
 
     const [goalEmbedding, challengeEmbedding] = await Promise.all([
-      generateEmbedding(goalsText),
-      generateEmbedding(challengesText),
+      generateGeminiEmbedding(goalsText),
+      generateGeminiEmbedding(challengesText),
     ]);
 
     // Use a large random number as a placeholder telegram_id for web users
