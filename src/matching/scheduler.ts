@@ -6,9 +6,14 @@ import {
   pairAlreadyProcessed,
   createMatch,
   getUserById,
+  updateMatch,
 } from '../db/supabase';
 import { runAgentNegotiation } from '../agents/negotiation';
-import { sendMatchNotification } from '../bot/notifications';
+import {
+  sendMatchNotification,
+  sendMatchNotificationToUser,
+  initiateCallsForMatch,
+} from '../bot/notifications';
 import { User } from '../types';
 
 let isRunning = false;
@@ -71,6 +76,8 @@ export async function runMatchingCycle(): Promise<void> {
             transcript: result.transcript,
             rationale: result.rationale,
             conversation_starter: result.conversationStarter,
+            collaboration_opportunities: result.collaborationOpportunities,
+            shared_tech_stack: result.sharedTechStack,
             status,
             user_a_consent: false,
             user_b_consent: false,
@@ -81,7 +88,37 @@ export async function runMatchingCycle(): Promise<void> {
             console.log(
               `[Matching] HIGH-VALUE MATCH: ${userA.name} <-> ${userB.name} (A: ${result.agentAScore.toFixed(2)}, B: ${result.agentBScore.toFixed(2)})`
             );
-            await sendMatchNotification(match, userA, userB);
+
+            // Check accept_all_matches for both users
+            const aConsent = userA.accept_all_matches === true;
+            const bConsent = userB.accept_all_matches === true;
+
+            if (aConsent || bConsent) {
+              await updateMatch(match.id, {
+                user_a_consent: aConsent,
+                user_b_consent: bConsent,
+              });
+            }
+
+            if (aConsent && bConsent) {
+              // Both auto-consented — skip notifications and trigger calls directly
+              console.log(
+                `[Matching] Both users have accept_all — initiating calls directly for match ${match.id}`
+              );
+              await updateMatch(match.id, { status: 'calling' });
+              await initiateCallsForMatch(match);
+            } else if (aConsent) {
+              // Only A auto-consented — notify B only
+              console.log(`[Matching] UserA has accept_all — notifying only UserB for match ${match.id}`);
+              await sendMatchNotificationToUser(match, userB, userA, 'b');
+            } else if (bConsent) {
+              // Only B auto-consented — notify A only
+              console.log(`[Matching] UserB has accept_all — notifying only UserA for match ${match.id}`);
+              await sendMatchNotificationToUser(match, userA, userB, 'a');
+            } else {
+              // Neither auto-consented — notify both
+              await sendMatchNotification(match, userA, userB);
+            }
           } else {
             console.log(
               `[Matching] Rejected: ${userA.name} <-> ${userB.name} (A: ${result.agentAScore.toFixed(2)}, B: ${result.agentBScore.toFixed(2)})`

@@ -3,6 +3,7 @@ export interface User {
   telegram_id: number;
   telegram_username?: string;
   phone_number?: string;
+  accept_all_matches: boolean;
   name: string;
   role: string;
   description: string;
@@ -26,6 +27,8 @@ export interface Match {
   transcript: AgentTurn[];
   rationale: string;
   conversation_starter: string;
+  collaboration_opportunities: string[];
+  shared_tech_stack: string[];
   status: MatchStatus;
   user_a_consent: boolean;
   user_b_consent: boolean;
@@ -55,6 +58,8 @@ export interface NegotiationResult {
   agentBScore: number;
   rationale: string;
   conversationStarter: string;
+  collaborationOpportunities: string[];
+  sharedTechStack: string[];
   transcript: AgentTurn[];
 }
 
@@ -62,6 +67,8 @@ export interface AgentScore {
   score: number;
   rationale: string;
   conversation_starter: string;
+  collaboration_opportunities: string[];
+  shared_tech_stack: string[];
 }
 
 export type OnboardingStep =

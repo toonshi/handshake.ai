@@ -161,3 +161,12 @@ export async function updateUserEmbeddings(
     .eq('id', userId);
   if (error) throw new Error(`Failed to update embeddings: ${error.message}`);
 }
+
+export async function setUserAcceptAll(userId: string): Promise<void> {
+  const db = getSupabase();
+  const { error } = await db
+    .from('users')
+    .update({ accept_all_matches: true })
+    .eq('id', userId);
+  if (error) throw new Error(`Failed to set accept_all: ${error.message}`);
+}

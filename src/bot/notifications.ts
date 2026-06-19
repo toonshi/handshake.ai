@@ -1,6 +1,6 @@
 import TelegramBot from 'node-telegram-bot-api';
 import { Match, User } from '../types';
-import { updateMatch, getUserById } from '../db/supabase';
+import { updateMatch, getUserById, getUserByTelegramId, setUserAcceptAll } from '../db/supabase';
 import { generateCallScripts } from '../introduction/callscript';
 import { initiateOutboundCall } from '../introduction/elevenlabs';
 
@@ -15,6 +15,45 @@ function getBot(): TelegramBot {
   return _bot;
 }
 
+function buildMatchMessage(
+  matchedUser: User,
+  match: Match,
+  party: 'a' | 'b'
+): string {
+  const rationaleText =
+    match.rationale.length > 200
+      ? match.rationale.slice(0, 200) + '…'
+      : match.rationale;
+
+  const techStack =
+    match.shared_tech_stack && match.shared_tech_stack.length > 0
+      ? match.shared_tech_stack.join(' · ')
+      : 'none identified';
+
+  const opportunities =
+    match.collaboration_opportunities && match.collaboration_opportunities.length > 0
+      ? match.collaboration_opportunities.map((o) => `→ ${o}`).join('\n')
+      : '→ none identified';
+
+  const matchIdParty = `${match.id}_${party}`;
+
+  return `🤝 *Your agent found a match.*
+
+*${matchedUser.name}* · ${matchedUser.role}
+
+📋 *Why:*
+${rationaleText}
+
+🛠 *Shared / complementary tech:*
+${techStack}
+
+🎯 *Collaboration opportunities:*
+${opportunities}
+
+💬 *Open with:*
+_"${match.conversation_starter}"_`;
+}
+
 export async function sendMatchNotification(
   match: Match,
   userA: User,
@@ -22,42 +61,15 @@ export async function sendMatchNotification(
 ): Promise<void> {
   const bot = getBot();
 
-  const scoreA = (match.agent_a_score * 100).toFixed(0);
-  const scoreB = (match.agent_b_score * 100).toFixed(0);
-
-  const messageA = `🤝 *Your agent found someone worth meeting.*
-
-*${userB.name}* — ${userB.role}
-
-📋 *Why your agent flagged this:*
-${match.rationale}
-
-💬 *Conversation starter your agents worked out:*
-_"${match.conversation_starter}"_
-
-🎯 Match confidence: ${scoreA}%
-
-Want us to call you with the full intro?`;
-
-  const messageB = `🤝 *Your agent found someone worth meeting.*
-
-*${userA.name}* — ${userA.role}
-
-📋 *Why your agent flagged this:*
-${match.rationale}
-
-💬 *Conversation starter your agents worked out:*
-_"${match.conversation_starter}"_
-
-🎯 Match confidence: ${scoreB}%
-
-Want us to call you with the full intro?`;
+  const messageA = buildMatchMessage(userB, match, 'a');
+  const messageB = buildMatchMessage(userA, match, 'b');
 
   const inlineKeyboardA = {
     inline_keyboard: [
       [
-        { text: '📞 Yes, call me', callback_data: `consent_yes_${match.id}_a` },
-        { text: '⏭ Not now', callback_data: `consent_no_${match.id}_a` },
+        { text: '✅ Connect', callback_data: `consent_yes_${match.id}_a` },
+        { text: '✅ Accept All', callback_data: `accept_all_${match.id}_a` },
+        { text: '❌ Pass', callback_data: `consent_no_${match.id}_a` },
       ],
     ],
   };
@@ -65,8 +77,9 @@ Want us to call you with the full intro?`;
   const inlineKeyboardB = {
     inline_keyboard: [
       [
-        { text: '📞 Yes, call me', callback_data: `consent_yes_${match.id}_b` },
-        { text: '⏭ Not now', callback_data: `consent_no_${match.id}_b` },
+        { text: '✅ Connect', callback_data: `consent_yes_${match.id}_b` },
+        { text: '✅ Accept All', callback_data: `accept_all_${match.id}_b` },
+        { text: '❌ Pass', callback_data: `consent_no_${match.id}_b` },
       ],
     ],
   };
@@ -85,6 +98,34 @@ Want us to call you with the full intro?`;
   console.log(`[Notifications] Sent match notifications for match ${match.id}`);
 }
 
+export async function sendMatchNotificationToUser(
+  match: Match,
+  notifyUser: User,
+  matchedWithUser: User,
+  party: 'a' | 'b'
+): Promise<void> {
+  const bot = getBot();
+
+  const message = buildMatchMessage(matchedWithUser, match, party);
+
+  const inlineKeyboard = {
+    inline_keyboard: [
+      [
+        { text: '✅ Connect', callback_data: `consent_yes_${match.id}_${party}` },
+        { text: '✅ Accept All', callback_data: `accept_all_${match.id}_${party}` },
+        { text: '❌ Pass', callback_data: `consent_no_${match.id}_${party}` },
+      ],
+    ],
+  };
+
+  await bot.sendMessage(notifyUser.telegram_id, message, {
+    parse_mode: 'Markdown',
+    reply_markup: inlineKeyboard,
+  });
+
+  console.log(`[Notifications] Sent match notification to ${notifyUser.name} for match ${match.id}`);
+}
+
 export async function handleConsentCallback(
   bot: TelegramBot,
   callbackQuery: TelegramBot.CallbackQuery
@@ -92,16 +133,21 @@ export async function handleConsentCallback(
   const data = callbackQuery.data;
   if (!data) return;
 
-  const match = data.match(/^consent_(yes|no)_([a-f0-9-]+)_(a|b)$/);
-  if (!match) return;
+  // Match both consent_yes/no and accept_all patterns
+  const consentMatch = data.match(/^consent_(yes|no)_([a-f0-9-]+)_(a|b)$/);
+  const acceptAllMatch = data.match(/^accept_all_([a-f0-9-]+)_(a|b)$/);
 
-  const [, decision, matchId, party] = match;
+  if (!consentMatch && !acceptAllMatch) return;
+
   const chatId = callbackQuery.message?.chat.id;
+  const telegramUserId = callbackQuery.from.id;
   if (!chatId) return;
 
   await bot.answerCallbackQuery(callbackQuery.id);
 
-  if (decision === 'no') {
+  // Handle Pass (no consent)
+  if (consentMatch && consentMatch[1] === 'no') {
+    const [, , matchId, party] = consentMatch;
     await bot.editMessageReplyMarkup(
       { inline_keyboard: [] },
       { chat_id: chatId, message_id: callbackQuery.message?.message_id }
@@ -119,18 +165,53 @@ export async function handleConsentCallback(
     return;
   }
 
-  // Consent given
-  await bot.editMessageReplyMarkup(
-    { inline_keyboard: [] },
-    { chat_id: chatId, message_id: callbackQuery.message?.message_id }
-  );
-  await bot.sendMessage(
-    chatId,
-    '✅ Great! We\'ll call you once the other person also confirms. Sit tight — this will be worth it.'
-  );
+  // Handle Accept All
+  if (acceptAllMatch) {
+    const [, matchId, party] = acceptAllMatch;
 
-  // Update consent
-  const { getMatchById, getUserById: getUserByIdFn } = await import('../db/supabase');
+    // Look up the user and set accept_all_matches
+    const triggeringUser = await getUserByTelegramId(telegramUserId);
+    if (triggeringUser) {
+      await setUserAcceptAll(triggeringUser.id);
+    }
+
+    await bot.editMessageReplyMarkup(
+      { inline_keyboard: [] },
+      { chat_id: chatId, message_id: callbackQuery.message?.message_id }
+    );
+    await bot.sendMessage(
+      chatId,
+      '✅ Done — you\'ll be auto-connected to all future high-confidence matches. No more prompts needed.'
+    );
+
+    // Also process as consent_yes for this match
+    await processConsentYes(bot, chatId, matchId, party as 'a' | 'b', callbackQuery.message?.message_id);
+    return;
+  }
+
+  // Handle Connect (consent yes)
+  if (consentMatch && consentMatch[1] === 'yes') {
+    const [, , matchId, party] = consentMatch;
+    await bot.editMessageReplyMarkup(
+      { inline_keyboard: [] },
+      { chat_id: chatId, message_id: callbackQuery.message?.message_id }
+    );
+    await bot.sendMessage(
+      chatId,
+      '✅ Great! We\'ll call you once the other person also confirms. Sit tight — this will be worth it.'
+    );
+    await processConsentYes(bot, chatId, matchId, party as 'a' | 'b', callbackQuery.message?.message_id);
+  }
+}
+
+async function processConsentYes(
+  bot: TelegramBot,
+  chatId: number,
+  matchId: string,
+  party: 'a' | 'b',
+  _messageId?: number
+): Promise<void> {
+  const { getMatchById } = await import('../db/supabase');
   const currentMatch = await getMatchById(matchId);
   if (!currentMatch) return;
 
@@ -149,7 +230,7 @@ export async function handleConsentCallback(
   }
 }
 
-async function initiateCallsForMatch(match: Match): Promise<void> {
+export async function initiateCallsForMatch(match: Match): Promise<void> {
   const bot = getBot();
 
   const [userA, userB] = await Promise.all([
@@ -275,7 +356,7 @@ export async function handleFeedbackCallback(
     { chat_id: chatId, message_id: callbackQuery.message?.message_id }
   );
 
-  const { getMatchById: getMById, getUserByTelegramId: getByTg } = await import('../db/supabase');
+  const { getMatchById: getMById } = await import('../db/supabase');
   const currentMatch = await getMById(matchId);
   if (!currentMatch) return;
 
