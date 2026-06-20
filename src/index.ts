@@ -14,9 +14,13 @@ async function main(): Promise<void> {
   console.log(`[Config] Matching cron: ${config.matching.cronSchedule}`);
   console.log('');
 
-  // Start Telegram bot
-  const bot = createBot();
-  console.log('✅ Telegram bot started (polling)');
+  // Start Telegram bot (polling locally, or no-op when webhook mode)
+  const bot = await createBot();
+  if (config.telegram.usePolling) {
+    console.log('✅ Telegram bot started (polling)');
+  } else {
+    console.log('✅ Telegram bot instance ready (webhook mode — no local polling)');
+  }
 
   // Start matching scheduler
   startMatchingScheduler();
@@ -36,13 +40,13 @@ async function main(): Promise<void> {
   // Graceful shutdown
   process.on('SIGTERM', () => {
     console.log('SIGTERM received, shutting down...');
-    bot.stopPolling();
+    if (config.telegram.usePolling) bot.stopPolling();
     process.exit(0);
   });
 
   process.on('SIGINT', () => {
     console.log('SIGINT received, shutting down...');
-    bot.stopPolling();
+    if (config.telegram.usePolling) bot.stopPolling();
     process.exit(0);
   });
 }

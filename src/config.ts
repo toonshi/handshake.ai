@@ -31,6 +31,8 @@ function optional(key: string, fallback: string): string {
 export const config = {
   telegram: {
     token: required('TELEGRAM_BOT_TOKEN'),
+    /** Local dev: long-polling. Production (Vercel): webhook via /api/bot */
+    usePolling: optional('TELEGRAM_USE_POLLING', 'true') === 'true',
   },
   gemini: {
     apiKey: required('GEMINI_API_KEY'),

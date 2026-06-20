@@ -1,5 +1,6 @@
 import TelegramBot from 'node-telegram-bot-api';
 import { config } from '../config';
+import { createPollingErrorLogger } from './polling';
 import {
   conductInterview,
   extractProfileFromHistory,
@@ -34,9 +35,32 @@ const ENRICHMENT_PROMPT = `
 
 _You can add as many as you like. Each one makes your agent smarter._`;
 
-export function createBot(): TelegramBot {
-  const bot = new TelegramBot(config.telegram.token, { polling: true });
+export async function createBot(): Promise<TelegramBot> {
+  if (!config.telegram.usePolling) {
+    console.log('[Bot] Polling disabled (TELEGRAM_USE_POLLING=false). Use webhook /api/bot.');
+    const bot = new TelegramBot(config.telegram.token);
+    setBotInstance(bot);
+    return bot;
+  }
+
+  const bot = new TelegramBot(config.telegram.token, {
+    polling: {
+      interval: 1000,
+      autoStart: false,
+      params: { timeout: 20 },
+    },
+  });
   setBotInstance(bot);
+
+  // Polling and webhook cannot run at the same time on one bot token
+  try {
+    await bot.deleteWebHook({ drop_pending_updates: false });
+    console.log('[Bot] Webhook cleared — starting long-polling');
+  } catch (err) {
+    console.warn('[Bot] Could not clear webhook (continuing):', err);
+  }
+
+  await bot.startPolling();
 
   // ─── /start ────────────────────────────────────────────────────────────────
 
@@ -497,9 +521,7 @@ Add your phone for voice intros: \`/setphone +254...\``,
     }
   });
 
-  bot.on('polling_error', (err) => {
-    console.error('[Bot] Polling error:', err);
-  });
+  bot.on('polling_error', createPollingErrorLogger('[Bot]'));
 
   return bot;
 }

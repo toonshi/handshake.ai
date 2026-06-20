@@ -1,6 +1,9 @@
 "use client";
 
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
+import { useActiveAccount } from "thirdweb/react";
+import WalletConnect from "@/components/wallet-connect";
+import { Button } from "@/components/ui/button";
 import type { PrefillResult } from "@/app/api/prefill/route";
 
 const ROLES = [
@@ -55,6 +58,13 @@ export default function RegistrationForm() {
   const [status, setStatus] = useState<Status>("idle");
   const [errorMsg, setErrorMsg] = useState("");
   const fileRef = useRef<HTMLInputElement>(null);
+  const account = useActiveAccount();
+
+  useEffect(() => {
+    if (account?.address) {
+      setForm((f) => ({ ...f, wallet_address: account.address }));
+    }
+  }, [account?.address]);
 
   async function handlePrefill() {
     if (!prefillInput.trim()) return;
@@ -336,13 +346,16 @@ export default function RegistrationForm() {
           />
         </Field>
 
-        <Field label="Avalanche wallet address" hint="Optional — for tips and project support">
-          <input
-            className="input"
-            placeholder="0x..."
-            value={form.wallet_address}
-            onChange={set("wallet_address")}
-          />
+        <Field label="Avalanche wallet" hint="Optional — connect or paste manually">
+          <div className="flex flex-col sm:flex-row gap-2">
+            <input
+              className="input flex-1"
+              placeholder="0x…"
+              value={form.wallet_address}
+              onChange={set("wallet_address")}
+            />
+            <WalletConnect />
+          </div>
         </Field>
       </section>
 
@@ -430,13 +443,9 @@ export default function RegistrationForm() {
         </p>
       )}
 
-      <button
-        type="submit"
-        disabled={status === "loading"}
-        className="w-full bg-white text-black font-medium text-sm rounded-xl py-3 px-4 hover:bg-[#ededed] disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-      >
+      <Button type="submit" fullWidth disabled={status === "loading"} className="py-3">
         {status === "loading" ? "Activating your agent…" : "Activate my agent →"}
-      </button>
+      </Button>
 
       <p className="text-center text-xs text-[#52525b]">
         Your agent runs every 2 hours. You&apos;ll only be contacted when there&apos;s a
