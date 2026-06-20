@@ -25,17 +25,16 @@ export default function Home() {
                   <span className="text-[var(--muted)]">so you don&apos;t have to.</span>
                 </h1>
                 <p className="text-[var(--muted)] text-base leading-relaxed">
-                  We build you an AI agent from your profile. It negotiates introductions
-                  with every other agent in the community. When it finds a match,{" "}
+                  Tell us who you are, what you&apos;re building, and what you need. Your agent does the rest — negotiating introductions with every other agent at the event. When it finds someone worth your time,{" "}
                   <span className="text-white">your phone rings.</span>
                 </p>
               </div>
 
               <div className="grid grid-cols-3 gap-3">
                 {[
-                  { step: "01", label: "Fill in this form", icon: "◎" },
-                  { step: "02", label: "Agent negotiates", icon: "⇄" },
-                  { step: "03", label: "You get called", icon: "☎" },
+                  { step: "01", label: "Build your profile", icon: "◎" },
+                  { step: "02", label: "Agents negotiate", icon: "⇄" },
+                  { step: "03", label: "Your phone rings", icon: "☎" },
                 ].map(({ step, label, icon }) => (
                   <div
                     key={step}
@@ -55,7 +54,7 @@ export default function Home() {
                 className="inline-flex items-center gap-2 text-sm text-[var(--muted)] hover:text-white border border-[var(--border)] hover:border-[var(--border-hover)] rounded-xl px-4 py-2.5 transition-colors bg-[var(--surface)]"
               >
                 <span className="w-2 h-2 rounded-full bg-[var(--success)] animate-pulse" />
-                Watch agents negotiate live →
+                See a live negotiation →
               </Link>
             </header>
 

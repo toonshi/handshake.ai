@@ -266,11 +266,11 @@ export default function LivePage() {
               <StatusBadge phase={phase} isRunning={isRunning} />
             </div>
             <h1 className="text-2xl sm:text-3xl font-semibold text-white tracking-tight">
-              Agent negotiation
+              Live agent negotiation
             </h1>
             <p className="text-sm text-[var(--muted)] max-w-2xl leading-relaxed">
-              Pick two community members. Their AI agents negotiate introductions in real time.
-              When compatibility clears the bar, you connect them — just like the Telegram flow.
+              Every registered user gets an AI agent built from their profile — their goals, their challenges, what they bring to the table.
+              Select any two people below and watch their agents run a real negotiation: five turns, scored from both sides, with a connection only made when both agents agree it clears the bar.
             </p>
           </div>
 
@@ -355,7 +355,7 @@ export default function LivePage() {
               {bubbles.length > 0 && (
                 <div className="card overflow-hidden animate-fade-up">
                   <div className="px-4 py-3 border-b border-[var(--border)] flex items-center justify-between gap-4">
-                    <p className="text-xs font-mono text-[#52525b]">Live conversation</p>
+                    <p className="text-xs font-mono text-[#52525b]">Negotiation transcript</p>
                     <div className="flex items-center gap-3 text-xs">
                       <span className="flex items-center gap-1.5 text-[var(--agent-a)]">
                         <span className="w-2 h-2 rounded-full bg-[var(--agent-a)]" />
@@ -411,7 +411,7 @@ export default function LivePage() {
                       <div className="flex justify-center py-3">
                         <div className="flex items-center gap-2 text-xs text-[var(--muted)] border border-[var(--border)] rounded-full px-4 py-2 bg-[var(--surface-2)]">
                           <Spinner />
-                          Agents scoring compatibility…
+                          Evaluating compatibility…
                         </div>
                       </div>
                     )}
@@ -435,7 +435,7 @@ export default function LivePage() {
 
                   {/* Individual scores */}
                   <div className="px-5 sm:px-6 py-5 border-b border-[var(--border)]">
-                    <p className="card-header !px-0 !py-0 !border-0 mb-4">Agent scores</p>
+                    <p className="card-header !px-0 !py-0 !border-0 mb-4">Confidence scores</p>
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
                       <ScoreBar label={userA?.name ?? "Agent A"} score={result.agentAScore} color="green" />
                       <ScoreBar label={userB?.name ?? "Agent B"} score={result.agentBScore} color="indigo" />
@@ -444,7 +444,7 @@ export default function LivePage() {
 
                   {result.sharedTechStack.length > 0 && (
                     <div className="px-5 sm:px-6 py-5 border-b border-[var(--border)]">
-                      <p className="card-header !px-0 !py-0 !border-0 mb-3">Shared / complementary tech</p>
+                      <p className="card-header !px-0 !py-0 !border-0 mb-3">Shared tech stack</p>
                       <div className="flex flex-wrap gap-2">
                         {result.sharedTechStack.map((t) => (
                           <span
@@ -460,7 +460,7 @@ export default function LivePage() {
 
                   {result.collaborationOpportunities.length > 0 && (
                     <div className="px-5 sm:px-6 py-5 border-b border-[var(--border)]">
-                      <p className="card-header !px-0 !py-0 !border-0 mb-3">Collaboration opportunities</p>
+                      <p className="card-header !px-0 !py-0 !border-0 mb-3">Where they can work together</p>
                       <ul className="space-y-2">
                         {result.collaborationOpportunities.map((o) => (
                           <li key={o} className="text-sm text-[var(--muted)] flex items-start gap-2">
@@ -479,7 +479,7 @@ export default function LivePage() {
 
                   {result.conversationStarter && (
                     <div className="px-5 sm:px-6 py-5 border-b border-[var(--border)]">
-                      <p className="card-header !px-0 !py-0 !border-0 mb-3">Open with</p>
+                      <p className="card-header !px-0 !py-0 !border-0 mb-3">Suggested opener</p>
                       <blockquote className="text-sm text-white italic border-l-2 border-[var(--success)] pl-4">
                         &ldquo;{result.conversationStarter}&rdquo;
                       </blockquote>
@@ -494,11 +494,11 @@ export default function LivePage() {
                           ✓
                         </span>
                         <div>
-                          <p className="text-sm font-medium text-[var(--success)]">Connected</p>
+                          <p className="text-sm font-medium text-[var(--success)]">Handshake made</p>
                           <p className="text-sm text-[var(--muted)] mt-1 leading-relaxed">
-                            Both users will receive a Telegram message with each other&apos;s contact details
+                            Both people have been notified on Telegram with each other&apos;s details
                             {userA?.telegram_username || userB?.telegram_username
-                              ? " and may get a voice briefing call."
+                              ? " and will receive a voice briefing call."
                               : "."}
                           </p>
                           {txHash && (
@@ -516,7 +516,7 @@ export default function LivePage() {
                     ) : matchQualified ? (
                       <div className="space-y-3">
                         <p className="text-xs text-[var(--muted)]">
-                          Demo shortcut: connects both users instantly (production uses per-user Telegram consent).
+                          In production, each person receives a Telegram prompt and consents individually. This demo connects them directly.
                         </p>
                         <div className="flex flex-col sm:flex-row gap-3">
                           <Button
@@ -550,8 +550,7 @@ export default function LivePage() {
                         <div className="flex items-start gap-3 p-4 rounded-xl bg-[var(--surface-2)] border border-[var(--border)]">
                           <span className="text-[var(--muted)] shrink-0">—</span>
                           <p className="text-sm text-[var(--muted)] leading-relaxed">
-                            Scores below the {Math.round(MATCH_THRESHOLD * 100)}% threshold — no match saved.
-                            Try different profiles or run again.
+                            One or both agents scored below {Math.round(MATCH_THRESHOLD * 100)}% — the bar wasn&apos;t cleared, so no match was saved. Try a different pairing or run again.
                           </p>
                         </div>
                         <Button variant="secondary" fullWidth onClick={reset}>
@@ -617,7 +616,7 @@ function EmptyUsersState({
       <div className="space-y-2">
         <h2 className="text-lg font-semibold text-white">No users to match yet</h2>
         <p className="text-sm text-[var(--muted)] max-w-sm mx-auto leading-relaxed">
-          Register at least two people, or load demo personas to try the live negotiation.
+          Register at least two community members, or load the demo profiles to see a live negotiation right now.
         </p>
       </div>
       <div className="flex flex-col sm:flex-row gap-3 justify-center">
