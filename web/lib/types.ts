@@ -35,6 +35,7 @@ export interface Match {
   user_b_consent: boolean;
   user_a_feedback?: number;
   user_b_feedback?: number;
+  tx_hash?: string;
   created_at: string;
   updated_at: string;
 }

@@ -3,6 +3,7 @@ import { updateMatch, getUserById, getUserByTelegramId, getMatchById, setUserAcc
 import { generateCallScripts } from '../introduction/callscript';
 import { initiateOutboundCall } from '../introduction/elevenlabs';
 import { sendMessage, editMessageReplyMarkup, answerCallbackQuery } from '../telegram';
+import { recordConnectionOnChain, snowtraceUrl } from '../avalanche';
 
 interface CallbackQuery {
   id: string;
@@ -130,6 +131,12 @@ export async function initiateCallsForMatch(match: Match): Promise<void> {
     return;
   }
 
+  // Record on Avalanche — best-effort, never blocks the intro
+  const txHash = await recordConnectionOnChain(userA.wallet_address, userB.wallet_address, match.id);
+  if (txHash) {
+    await updateMatch(match.id, { tx_hash: txHash }).catch(() => {/* non-fatal */});
+  }
+
   let scripts;
   try {
     scripts = await generateCallScripts(match, userA, userB);
@@ -142,10 +149,14 @@ export async function initiateCallsForMatch(match: Match): Promise<void> {
   }
 
   // Send Telegram message with other person's contact
+  const chainLine = txHash
+    ? `\n⛓ *On Avalanche:* [View transaction](${snowtraceUrl(txHash)})`
+    : '';
+
   const telegramMessageA = `📞 *The intro is confirmed!*
 
 Here's ${userB.name}'s info:
-${userB.telegram_username ? `Telegram: @${userB.telegram_username}` : 'No username — ask me if you need help connecting'}${userB.wallet_address ? `\nAVAX wallet: \`${userB.wallet_address}\`` : ''}
+${userB.telegram_username ? `Telegram: @${userB.telegram_username}` : 'No username — ask me if you need help connecting'}${userB.wallet_address ? `\nAVAX wallet: \`${userB.wallet_address}\`` : ''}${chainLine}
 
 💬 *Open with:*
 _"${match.conversation_starter}"_
@@ -155,7 +166,7 @@ ${userA.phone_number ? "We'll call you shortly with a full briefing." : 'Add you
   const telegramMessageB = `📞 *The intro is confirmed!*
 
 Here's ${userA.name}'s info:
-${userA.telegram_username ? `Telegram: @${userA.telegram_username}` : 'No username — ask me if you need help connecting'}${userA.wallet_address ? `\nAVAX wallet: \`${userA.wallet_address}\`` : ''}
+${userA.telegram_username ? `Telegram: @${userA.telegram_username}` : 'No username — ask me if you need help connecting'}${userA.wallet_address ? `\nAVAX wallet: \`${userA.wallet_address}\`` : ''}${chainLine}
 
 💬 *Open with:*
 _"${match.conversation_starter}"_

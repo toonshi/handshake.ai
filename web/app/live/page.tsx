@@ -62,6 +62,7 @@ export default function LivePage() {
   const [result, setResult] = useState<LiveResult | null>(null);
   const [consentStatus, setConsentStatus] = useState<ConsentStatus>("idle");
   const [consentError, setConsentError] = useState<string | null>(null);
+  const [txHash, setTxHash] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [seeding, setSeeding] = useState(false);
   const chatEndRef = useRef<HTMLDivElement>(null);
@@ -220,6 +221,7 @@ export default function LivePage() {
       });
       const json = await res.json();
       if (!res.ok) throw new Error(json.error ?? "Failed to connect");
+      setTxHash(json.tx_hash ?? null);
       setConsentStatus("done");
     } catch (err) {
       setConsentStatus("error");
@@ -234,6 +236,7 @@ export default function LivePage() {
     setPhase("idle");
     setConsentStatus("idle");
     setConsentError(null);
+    setTxHash(null);
   }
 
   const userA = users.find((u) => u.id === userAId);
@@ -498,6 +501,16 @@ export default function LivePage() {
                               ? " and may get a voice briefing call."
                               : "."}
                           </p>
+                          {txHash && (
+                            <a
+                              href={`https://testnet.snowtrace.io/tx/${txHash}`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="mt-2 inline-flex items-center gap-1.5 text-xs text-[var(--success)] hover:underline"
+                            >
+                              ⛓ View on Avalanche →
+                            </a>
+                          )}
                         </div>
                       </div>
                     ) : matchQualified ? (

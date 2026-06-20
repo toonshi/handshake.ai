@@ -22,7 +22,9 @@ export async function POST(req: NextRequest) {
       await initiateCallsForMatch(updatedMatch);
     }
 
-    return NextResponse.json({ ok: true });
+    // Return tx_hash if the on-chain record was saved
+    const finalMatch = await getMatchById(matchId);
+    return NextResponse.json({ ok: true, tx_hash: finalMatch?.tx_hash ?? null });
   } catch (err) {
     const message = err instanceof Error ? err.message : "Internal error";
     console.error("[consent]", err);
