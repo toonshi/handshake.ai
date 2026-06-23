@@ -35,13 +35,18 @@ export const config = {
     usePolling: optional('TELEGRAM_USE_POLLING', 'true') === 'true',
   },
   gemini: {
-    apiKey: required('GEMINI_API_KEY'),
+    apiKey: optional('GEMINI_API_KEY', ''),
     textModel: optional('GEMINI_TEXT_MODEL', 'gemini-2.5-flash'),
     embeddingModel: optional('GEMINI_EMBEDDING_MODEL', 'gemini-embedding-2'),
     embeddingDimensions: parseInt(optional('GEMINI_EMBEDDING_DIMENSIONS', '1536'), 10),
   },
   db: {
     url: optional('DATABASE_URL', 'postgresql://handshake:handshake_db_pass_2024@104.248.134.75:5432/handshake'),
+  },
+  openrouter: {
+    apiKey: optional('OPENROUTER_API_KEY', ''),
+    model: optional('OPENROUTER_MODEL', 'openai/gpt-4o'),
+    embeddingModel: optional('OPENROUTER_EMBEDDING_MODEL', 'openai/text-embedding-3-small'),
   },
   elevenlabs: {
     apiKey: optional('ELEVENLABS_API_KEY', ''),

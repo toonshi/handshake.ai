@@ -1,3 +1,8 @@
+import dns from 'dns';
+if (typeof dns.setDefaultResultOrder === 'function') {
+  dns.setDefaultResultOrder('ipv4first');
+}
+
 import { createBot } from './bot';
 import { startMatchingScheduler, runMatchingCycle } from './matching/scheduler';
 
@@ -8,8 +13,15 @@ async function main(): Promise<void> {
 
   // Validate config early
   const { config } = await import('./config');
+  if (!config.openrouter.apiKey && !config.gemini.apiKey) {
+    throw new Error('Either OPENROUTER_API_KEY or GEMINI_API_KEY must be provided in your .env configuration.');
+  }
   console.log(`[Config] Telegram bot token: ...${config.telegram.token.slice(-6)}`);
-  console.log(`[Config] Gemini text model: ${config.gemini.textModel}`);
+  if (config.openrouter.apiKey) {
+    console.log(`[Config] LLM Provider: OpenRouter (${config.openrouter.model})`);
+  } else {
+    console.log(`[Config] LLM Provider: Gemini (${config.gemini.textModel})`);
+  }
   console.log(`[Config] Match threshold: ${config.matching.scoreThreshold}`);
   console.log(`[Config] Matching cron: ${config.matching.cronSchedule}`);
   console.log('');
