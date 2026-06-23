@@ -13,6 +13,7 @@
     "node-cron": "^3.0.3",
     "node-telegram-bot-api": "^0.64.0",
     "pdf-parse": "^2.4.5",
+    "postgres": "^3.4.9",
     "thirdweb": "^5.120.1"
   },
   "devDependencies": {

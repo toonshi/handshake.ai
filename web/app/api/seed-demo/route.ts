@@ -1,14 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createClient } from "@supabase/supabase-js";
+import postgres from "postgres";
 import { generateGeminiEmbedding } from "@/lib/gemini";
 
-function getSupabase() {
-  return createClient(
-    process.env.SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_KEY!,
-    { auth: { persistSession: false } }
-  );
-}
+const sql = postgres(process.env.DATABASE_URL!, { ssl: false, max: 5 });
 
 // Demo personas designed to produce high-confidence agent matches.
 // Three natural pairs:
@@ -113,80 +107,59 @@ export async function GET(req: NextRequest) {
     i === 0 && presenterUsername ? { ...u, telegram_username: presenterUsername } : u
   );
 
-  const supabase = getSupabase();
   const results: Array<{ name: string; status: string; id?: string }> = [];
 
   if (reset) {
-    const usernames = users.map((u) => u.telegram_username);
-    const { error } = await supabase
-      .from("users")
-      .delete()
-      .in("telegram_username", usernames);
-    if (error) {
-      return NextResponse.json({ error: `Reset failed: ${error.message}` }, { status: 500 });
+    try {
+      const usernames = users.map((u) => u.telegram_username);
+      await sql`DELETE FROM users WHERE telegram_username = ANY(${usernames})`;
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      return NextResponse.json({ error: `Reset failed: ${msg}` }, { status: 500 });
     }
   }
 
   for (const demo of users) {
     try {
       // Skip if already exists (unless reset was requested)
-      const { data: existing } = await supabase
-        .from("users")
-        .select("id")
-        .eq("telegram_username", demo.telegram_username)
-        .single();
-
-      if (existing) {
-        results.push({ name: demo.name, status: "skipped (already exists)", id: existing.id });
+      const existing = await sql`
+        SELECT id FROM users WHERE telegram_username = ${demo.telegram_username} LIMIT 1
+      `;
+      if (existing.length > 0) {
+        results.push({ name: demo.name, status: "skipped (already exists)", id: existing[0].id as string });
         continue;
       }
 
-      // Generate embeddings
-      const goalsText = demo.goals;
-      const challengesText = demo.challenges;
-
       const [goalEmbedding, challengeEmbedding] = await Promise.all([
-        generateGeminiEmbedding(goalsText),
-        generateGeminiEmbedding(challengesText),
+        generateGeminiEmbedding(demo.goals),
+        generateGeminiEmbedding(demo.challenges),
       ]);
 
       const enrichments: Record<string, unknown> = { websites: [] };
       if (demo.github_username) {
-        enrichments.github = {
-          username: demo.github_username,
-          fetchedAt: new Date().toISOString(),
-        };
+        enrichments.github = { username: demo.github_username, fetchedAt: new Date().toISOString() };
       }
 
-      // Use a stable negative telegram_id per demo user
       const placeholderTelegramId = -(Math.abs(hashCode(demo.telegram_username)) % 2147483647);
 
-      const { data: user, error } = await supabase
-        .from("users")
-        .insert({
-          telegram_id: placeholderTelegramId,
-          telegram_username: demo.telegram_username,
-          phone_number: demo.phone_number || null,
-          wallet_address: demo.wallet_address || null,
-          name: demo.name,
-          role: demo.role,
-          description: demo.description,
-          goals: demo.goals,
-          challenges: demo.challenges,
-          offers: demo.offers,
-          enrichments,
-          goal_embedding: goalEmbedding,
-          challenge_embedding: challengeEmbedding,
-          accept_all_matches: false,
-        })
-        .select("id")
-        .single();
-
-      if (error) {
-        results.push({ name: demo.name, status: `error: ${error.message}` });
-      } else {
-        results.push({ name: demo.name, status: "created", id: user.id });
-      }
+      const inserted = await sql`
+        INSERT INTO users (
+          telegram_id, telegram_username, phone_number, wallet_address,
+          name, role, description, goals, challenges, offers,
+          enrichments, goal_embedding, challenge_embedding, accept_all_matches
+        ) VALUES (
+          ${placeholderTelegramId}, ${demo.telegram_username},
+          ${demo.phone_number || null}, ${demo.wallet_address || null},
+          ${demo.name}, ${demo.role}, ${demo.description},
+          ${demo.goals}, ${demo.challenges}, ${demo.offers},
+          ${JSON.stringify(enrichments)}::jsonb,
+          ${JSON.stringify(goalEmbedding)}::vector,
+          ${JSON.stringify(challengeEmbedding)}::vector,
+          false
+        )
+        RETURNING id
+      `;
+      results.push({ name: demo.name, status: "created", id: inserted[0].id as string });
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       results.push({ name: demo.name, status: `error: ${msg}` });

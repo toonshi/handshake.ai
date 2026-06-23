@@ -2,20 +2,11 @@ export const maxDuration = 60;
 export const dynamic = 'force-dynamic';
 
 import { NextRequest } from "next/server";
-import { createClient } from "@supabase/supabase-js";
+import { getUserById, createMatch } from "@/lib/db";
 import { runAgentNegotiationStreaming } from "@/lib/agents/negotiation";
-import { createMatch } from "@/lib/db";
 import type { User } from "@/lib/types";
 
 const SCORE_THRESHOLD = parseFloat(process.env.MATCH_SCORE_THRESHOLD ?? '0.72');
-
-function getSupabase() {
-  return createClient(
-    process.env.SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_KEY!,
-    { auth: { persistSession: false } }
-  );
-}
 
 export async function POST(req: NextRequest) {
   const enc = new TextEncoder();
@@ -30,10 +21,9 @@ export async function POST(req: NextRequest) {
     start(controller) {
       void (async () => {
         try {
-          const supabase = getSupabase();
-          const [{ data: userA }, { data: userB }] = await Promise.all([
-            supabase.from("users").select("*").eq("id", userAId).single(),
-            supabase.from("users").select("*").eq("id", userBId).single(),
+          const [userA, userB] = await Promise.all([
+            getUserById(userAId),
+            getUserById(userBId),
           ]);
 
           if (!userA || !userB) {
