@@ -40,7 +40,7 @@ export async function recordConnectionOnChain(
 
   try {
     const thirdwebClient = createThirdwebClient({
-      secretKey: process.env.THIRDWEB_SECRET_KEY,
+      secretKey: process.env.THIRDWEB_SECRET_KEY!,
       clientId: process.env.NEXT_PUBLIC_THIRDWEB_CLIENT_ID,
     });
 
