@@ -51,8 +51,10 @@ export type MatchStatus =
   | 'declined';
 
 export interface AgentTurn {
-  agent: 'A' | 'B';
-  content: string;
+  agent: 'A' | 'B' | 'META';
+  content?: string;
+  collaboration_opportunities?: string[];
+  shared_tech_stack?: string[];
 }
 
 export interface NegotiationResult {

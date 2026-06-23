@@ -141,18 +141,29 @@ export async function createMatch(
   data: Omit<Match, 'id' | 'created_at' | 'updated_at'>
 ): Promise<Match> {
   const db = getDb();
+  // collaboration_opportunities and shared_tech_stack may not exist in the DB yet.
+  // Store them in transcript as a metadata entry so no data is lost.
+  const { collaboration_opportunities, shared_tech_stack, ...baseData } = data;
+  const transcriptWithMeta = [
+    ...(baseData.transcript ?? []),
+    { agent: 'META' as const, collaboration_opportunities, shared_tech_stack },
+  ];
   const { data: match, error } = await db
     .from('matches')
-    .insert(data)
+    .insert({ ...baseData, transcript: transcriptWithMeta })
     .select()
     .single();
   if (error) throw new Error(`Failed to create match: ${error.message}`);
-  return match as Match;
+  // Reattach the extra fields to the returned object
+  return { ...match, collaboration_opportunities, shared_tech_stack } as unknown as Match;
 }
 
 export async function updateMatch(id: string, data: Partial<Match>): Promise<void> {
   const db = getDb();
-  const { error } = await db.from('matches').update(data).eq('id', id);
+  // Strip fields that may not exist in the DB schema yet
+  const { collaboration_opportunities, shared_tech_stack, ...safeData } = data as Record<string, unknown>;
+  void collaboration_opportunities; void shared_tech_stack;
+  const { error } = await db.from('matches').update(safeData).eq('id', id);
   if (error) throw new Error(`Failed to update match: ${error.message}`);
 }
 
@@ -162,7 +173,23 @@ export async function getMatchById(id: string): Promise<Match | null> {
   if (error && error.code !== 'PGRST116') {
     throw new Error(`Failed to get match: ${error.message}`);
   }
-  return data as Match | null;
+  if (!data) return null;
+  return extractMatchMeta(data);
+}
+
+function extractMatchMeta(raw: Record<string, unknown>): Match {
+  const transcript = (raw.transcript ?? []) as Array<Record<string, unknown>>;
+  const metaIdx = transcript.findIndex((t) => t.agent === 'META');
+  let collaboration_opportunities: string[] = (raw.collaboration_opportunities as string[]) ?? [];
+  let shared_tech_stack: string[] = (raw.shared_tech_stack as string[]) ?? [];
+  let cleanTranscript = transcript;
+  if (metaIdx !== -1) {
+    const meta = transcript[metaIdx];
+    collaboration_opportunities = (meta.collaboration_opportunities as string[]) ?? collaboration_opportunities;
+    shared_tech_stack = (meta.shared_tech_stack as string[]) ?? shared_tech_stack;
+    cleanTranscript = transcript.filter((_, i) => i !== metaIdx);
+  }
+  return { ...raw, transcript: cleanTranscript, collaboration_opportunities, shared_tech_stack } as unknown as Match;
 }
 
 // ─── Onboarding sessions ──────────────────────────────────────────────────────
