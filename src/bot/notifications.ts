@@ -241,17 +241,6 @@ export async function initiateCallsForMatch(match: Match): Promise<void> {
     return;
   }
 
-  let scripts;
-  try {
-    scripts = await generateCallScripts(match, userA, userB);
-  } catch (err) {
-    console.error('[Notifications] Failed to generate call scripts:', err);
-    scripts = {
-      personAScript: `Hi ${userA.name} — this is Handshake. Your agent found a match with ${userB.name}. Check your Telegram for details. Good luck.`,
-      personBScript: `Hi ${userB.name} — this is Handshake. Your agent found a match with ${userA.name}. Check your Telegram for details. Good luck.`,
-    };
-  }
-
   // Send Telegram message with other person's contact
   const telegramMessageA = `📞 *The intro is confirmed!*
 

@@ -39,7 +39,7 @@ export async function upsertUser(
       ${data.wallet_address ?? null}, ${data.accept_all_matches ?? false},
       ${data.name}, ${data.role}, ${data.description},
       ${data.goals}, ${data.challenges}, ${data.offers},
-      ${sql.json(data.enrichments ?? { websites: [] })}
+      ${JSON.stringify(data.enrichments ?? { websites: [] })}::jsonb
     )
     ON CONFLICT (telegram_id) DO UPDATE SET
       telegram_username  = EXCLUDED.telegram_username,
@@ -125,10 +125,10 @@ export async function createMatch(
     ) VALUES (
       ${data.user_a_id}, ${data.user_b_id},
       ${data.similarity_score}, ${data.agent_a_score}, ${data.agent_b_score},
-      ${sql.json(data.transcript ?? [])},
+      ${JSON.stringify(data.transcript ?? [])}::jsonb,
       ${data.rationale ?? ''}, ${data.conversation_starter ?? ''},
-      ${sql.json(data.collaboration_opportunities ?? [])},
-      ${sql.json(data.shared_tech_stack ?? [])},
+      ${JSON.stringify(data.collaboration_opportunities ?? [])}::jsonb,
+      ${JSON.stringify(data.shared_tech_stack ?? [])}::jsonb,
       ${data.status}, ${data.user_a_consent ?? false}, ${data.user_b_consent ?? false}
     )
     RETURNING *
@@ -180,7 +180,7 @@ export async function getMatchById(id: string): Promise<Match | null> {
 
 export async function updateUserEnrichments(userId: string, enrichments: ProfileEnrichments): Promise<void> {
   const sql = getDb();
-  await sql`UPDATE users SET enrichments = ${sql.json(enrichments)}, updated_at = now() WHERE id = ${userId}`;
+  await sql`UPDATE users SET enrichments = ${JSON.stringify(enrichments)}::jsonb, updated_at = now() WHERE id = ${userId}`;
 }
 
 export async function updateUserEmbeddings(
@@ -227,7 +227,7 @@ export async function saveOnboardingSession(
   const sql = getDb();
   await sql`
     INSERT INTO onboarding_sessions (telegram_id, session)
-    VALUES (${telegramId}, ${sql.json(session)})
+    VALUES (${telegramId}, ${JSON.stringify(session)}::jsonb)
     ON CONFLICT (telegram_id) DO UPDATE SET session = EXCLUDED.session, updated_at = now()
   `;
 }

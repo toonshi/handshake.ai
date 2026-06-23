@@ -40,9 +40,8 @@ export const config = {
     embeddingModel: optional('GEMINI_EMBEDDING_MODEL', 'gemini-embedding-2'),
     embeddingDimensions: parseInt(optional('GEMINI_EMBEDDING_DIMENSIONS', '1536'), 10),
   },
-  supabase: {
-    url: required('SUPABASE_URL'),
-    serviceKey: required('SUPABASE_SERVICE_KEY'),
+  db: {
+    url: optional('DATABASE_URL', 'postgresql://handshake:handshake_db_pass_2024@104.248.134.75:5432/handshake'),
   },
   elevenlabs: {
     apiKey: optional('ELEVENLABS_API_KEY', ''),

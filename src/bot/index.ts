@@ -15,7 +15,7 @@ import {
   updateUserEnrichments,
   getUserById,
   getMatchById,
-  getSupabase,
+  getDb,
 } from '../db/supabase';
 import { generateUserEmbeddings } from '../matching/embeddings';
 import { runMatchingCycle } from '../matching/scheduler';
@@ -80,16 +80,15 @@ export async function createBot(): Promise<TelegramBot> {
 
       // Check if registered via web form (placeholder telegram_id, matched by username)
       if (msg.from?.username) {
-        const db = getSupabase();
-        const { data: webUser } = await db
-          .from('users')
-          .select('*')
-          .eq('telegram_username', msg.from.username)
-          .lt('telegram_id', 0) // web-registered users have negative placeholder IDs
-          .single();
+        const sql = getDb();
+        const rows = await sql`
+          SELECT * FROM users
+          WHERE telegram_username = ${msg.from.username} AND telegram_id < 0 LIMIT 1
+        `;
+        const webUser = rows[0] as import('../types').User | undefined;
 
         if (webUser) {
-          await db.from('users').update({ telegram_id: telegramId }).eq('id', webUser.id);
+          await sql`UPDATE users SET telegram_id = ${telegramId} WHERE id = ${webUser.id}`;
           await bot.sendMessage(
             chatId,
             `✅ *Linked! Welcome ${webUser.name}.*\n\nYour web profile is now connected. Your agent is active — I'll message you when it finds a match.`,
@@ -293,8 +292,8 @@ Your agent will reference this in introductions.`,
         return;
       }
 
-      const db = getSupabase();
-      await db.from('users').update({ phone_number: phone }).eq('telegram_id', telegramId);
+      const sql = getDb();
+      await sql`UPDATE users SET phone_number = ${phone} WHERE telegram_id = ${telegramId}`;
       await bot.sendMessage(
         chatId,
         `✅ Phone number saved: ${phone}\nYou'll receive voice calls when a match is confirmed.`
