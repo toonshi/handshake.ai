@@ -71,7 +71,7 @@ export default function Home() {
                 <div className="divide-y divide-[var(--surface-2)]">
                   <SubmissionItem
                     q="Which bounty are you building for?"
-                    a="Boardy.ai for Kuzana — an AI-powered matchmaking connector for the MiniHack Kenya community."
+                    a="Boardy.ai for Handshake — an AI-powered matchmaking connector for the MiniHack Kenya community."
                   />
                   <SubmissionItem
                     q="In 5 sentences, what is the core problem and why did you choose it?"
@@ -79,7 +79,7 @@ export default function Home() {
                   />
                   <SubmissionItem
                     q="How does Avalanche infrastructure (smart contracts, USDC, embedded wallets, AA) make your solution better than a Web2 approach?"
-                    a="Embedded wallets (via Dynamic) let users onboard without ever touching a wallet UI, while creating a portable on-chain identity that carries reputation across every future Kuzana event. Match quality ratings stored on Avalanche are tamper-proof and portable — a user's track record follows them forever, not siloed in one app. USDC on Avalanche enables introduction bounties — a founder stakes $5 on a connection request, paid to the connector when the intro leads to a verified meeting, creating a real market for quality human networks. Account Abstraction makes gas fees invisible (platform-sponsored), removing the last barrier for East African users unfamiliar with crypto. Smart contract escrow adds accountability — both parties sign an on-chain commitment to connect within 48 hours, dramatically improving follow-through beyond what any Web2 nudge achieves."
+                    a="Embedded wallets (via Dynamic) let users onboard without ever touching a wallet UI, while creating a portable on-chain identity that carries reputation across every future Handshake event. Match quality ratings stored on Avalanche are tamper-proof and portable — a user's track record follows them forever, not siloed in one app. USDC on Avalanche enables introduction bounties — a founder stakes $5 on a connection request, paid to the connector when the intro leads to a verified meeting, creating a real market for quality human networks. Account Abstraction makes gas fees invisible (platform-sponsored), removing the last barrier for East African users unfamiliar with crypto. Smart contract escrow adds accountability — both parties sign an on-chain commitment to connect within 48 hours, dramatically improving follow-through beyond what any Web2 nudge achieves."
                   />
                 </div>
               </div>

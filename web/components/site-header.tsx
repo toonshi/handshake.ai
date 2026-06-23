@@ -7,7 +7,7 @@ export default function SiteHeader({ active }: { active?: "home" | "live" }) {
       <div className="max-w-5xl mx-auto px-4 h-14 flex items-center justify-between gap-4">
         <Link href="/" className="flex items-center gap-2.5 shrink-0 group">
           <span className="w-7 h-7 rounded-lg bg-[var(--success)]/10 border border-[var(--success)]/30 flex items-center justify-center text-[var(--success)] text-sm font-semibold group-hover:bg-[var(--success)]/20 transition-colors">
-            K
+            H
           </span>
           <span className="text-sm font-medium text-white hidden sm:inline">
             Handshake
