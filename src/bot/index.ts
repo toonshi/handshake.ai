@@ -54,7 +54,7 @@ export async function createBot(): Promise<TelegramBot> {
 
   // Polling and webhook cannot run at the same time on one bot token
   try {
-    await bot.deleteWebHook({ drop_pending_updates: false });
+    await bot.deleteWebHook();
     console.log('[Bot] Webhook cleared — starting long-polling');
   } catch (err) {
     console.warn('[Bot] Could not clear webhook (continuing):', err);
