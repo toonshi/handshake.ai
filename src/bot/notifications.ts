@@ -249,8 +249,8 @@ export async function initiateCallsForMatch(match: Match): Promise<void> {
   } catch (err) {
     console.error('[Notifications] Failed to generate call scripts:', err);
     scripts = {
-      personAScript: `Hi ${userA.name} — this is Kuzana Connector. Your agent found a match with ${userB.name}. Check your Telegram for details. Good luck.`,
-      personBScript: `Hi ${userB.name} — this is Kuzana Connector. Your agent found a match with ${userA.name}. Check your Telegram for details. Good luck.`,
+      personAScript: `Hi ${userA.name} — this is Handshake. Your agent found a match with ${userB.name}. Check your Telegram for details. Good luck.`,
+      personBScript: `Hi ${userB.name} — this is Handshake. Your agent found a match with ${userA.name}. Check your Telegram for details. Good luck.`,
     };
   }
 

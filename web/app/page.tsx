@@ -15,7 +15,7 @@ export default function Home() {
             <header className="space-y-6">
               <div className="inline-flex items-center gap-2 text-xs font-mono text-[#52525b] border border-[var(--border)] rounded-full px-3 py-1.5 bg-[var(--surface)]">
                 <span className="w-1.5 h-1.5 rounded-full bg-[var(--success)] animate-pulse inline-block" />
-                MiniHack Kenya · Kuzana Connector
+                MiniHack Kenya · Handshake
               </div>
 
               <div className="space-y-4">
@@ -86,7 +86,7 @@ export default function Home() {
             </section>
 
             <footer className="text-center text-xs text-[#3f3f46] pb-4">
-              Built for MiniHack · Kuzana ecosystem · Kenya
+              Built for MiniHack · MiniHack ecosystem · Kenya
             </footer>
           </div>
         </main>

@@ -280,7 +280,7 @@ ${enrichmentStatus}
   if (command === '/help') {
     await sendMessage(
       chatId,
-      `*Kuzana Connector Commands*
+      `*Handshake Commands*
 
 /start — register or check your status
 /status — view your current profile
@@ -385,7 +385,7 @@ The more context your agent has, the more specific and credible its introduction
   }
 
   // Not registered, not in onboarding
-  await sendMessage(chatId, 'Send /start to register with Kuzana Connector.');
+  await sendMessage(chatId, 'Send /start to register with Handshake.');
 }
 
 async function handleCallbackQuery(callbackQuery: {

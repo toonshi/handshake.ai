@@ -43,7 +43,7 @@ function extractGitHubUsername(input: string): string | null {
 async function fetchGitHubData(username: string): Promise<string> {
   const token = process.env.GITHUB_TOKEN;
   const headers: Record<string, string> = {
-    "User-Agent": "kuzana-connector",
+    "User-Agent": "handshake-ai",
     Accept: "application/vnd.github.v3+json",
   };
   if (token) headers["Authorization"] = `Bearer ${token}`;
@@ -104,7 +104,7 @@ async function fetchUrlData(url: string): Promise<string> {
   const res = await fetch(jinaUrl, {
     headers: {
       "Accept": "text/plain",
-      "User-Agent": "kuzana-connector",
+      "User-Agent": "handshake-ai",
     },
     signal: AbortSignal.timeout(15_000),
   });

@@ -2,7 +2,7 @@ import { createBot } from './bot';
 import { startMatchingScheduler, runMatchingCycle } from './matching/scheduler';
 
 async function main(): Promise<void> {
-  console.log('🚀 Kuzana Connector starting...');
+  console.log('🚀 Handshake starting...');
   console.log('"Your agent works the room so you don\'t have to."');
   console.log('');
 
@@ -35,7 +35,7 @@ async function main(): Promise<void> {
   }, 10_000);
 
   console.log('');
-  console.log('✅ Kuzana Connector is live. Waiting for users...');
+  console.log('✅ Handshake is live. Waiting for users...');
 
   // Graceful shutdown
   process.on('SIGTERM', () => {

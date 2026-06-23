@@ -10,7 +10,7 @@ export default function SiteHeader({ active }: { active?: "home" | "live" }) {
             K
           </span>
           <span className="text-sm font-medium text-white hidden sm:inline">
-            Kuzana Connector
+            Handshake
           </span>
         </Link>
 

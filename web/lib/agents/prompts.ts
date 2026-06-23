@@ -92,7 +92,7 @@ export function buildLiveContext(user: User, liveRepos?: LiveRepo[]): string {
 export function buildAgentSystemPrompt(user: User, liveRepos?: LiveRepo[]): string {
   const context = buildLiveContext(user, liveRepos);
 
-  return `You are an intelligent agent representing ${user.name} in the Kuzana/MiniHack community in Kenya.
+  return `You are an intelligent agent representing ${user.name} in the MiniHack Kenya community in Kenya.
 
 ${context}
 

@@ -20,7 +20,7 @@ async function fetchLiveGitHubRepos(username: string): Promise<LiveRepo[]> {
   try {
     const url = `https://api.github.com/users/${encodeURIComponent(username)}/repos?sort=stars&per_page=8&type=owner`;
     const response = await fetch(url, {
-      headers: { 'User-Agent': 'kuzana-connector' },
+      headers: { 'User-Agent': 'handshake-ai' },
     });
     if (!response.ok) return [];
     const data = await response.json() as Array<{

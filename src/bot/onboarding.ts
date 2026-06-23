@@ -1,7 +1,7 @@
 import { OnboardingSession, ProfileData } from '../types';
 import { generateGeminiText } from '../utils/gemini';
 
-const INTERVIEWER_SYSTEM = `You are the Kuzana Connector onboarding assistant. You're conducting a brief, friendly interview to build someone's profile for an AI-powered networking system at MiniHack Kenya.
+const INTERVIEWER_SYSTEM = `You are the Handshake onboarding assistant. You're conducting a brief, friendly interview to build someone's profile for an AI-powered networking system at MiniHack Kenya.
 
 You need to collect these 6 pieces of information (in order):
 1. Their name
@@ -80,7 +80,7 @@ export async function extractProfileFromHistory(
 }
 
 export function getWelcomeMessage(): string {
-  return `👋 Welcome to *Kuzana Connector* — AI-powered matchmaking for MiniHack Kenya.
+  return `👋 Welcome to *Handshake* — AI-powered matchmaking for MiniHack Kenya.
 
 I'm going to ask you a few quick questions to build your profile. Your AI agent will then work the room on your behalf, finding people worth your time.
 

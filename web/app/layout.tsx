@@ -5,11 +5,11 @@ import {ThirdwebProvider } from "thirdweb/react";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Kuzana Connector — Your agent works the room so you don't have to",
+  title: "Handshake — Your agent works the room so you don't have to",
   description:
     "AI-powered matchmaking for MiniHack Kenya. Your agent negotiates introductions on your behalf, then calls you when it finds someone worth your time.",
   openGraph: {
-    title: "Kuzana Connector",
+    title: "Handshake",
     description: "Your agent works the room so you don't have to.",
   },
 };

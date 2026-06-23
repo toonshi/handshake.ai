@@ -1,7 +1,7 @@
 {
-  "name": "kuzana-connector",
+  "name": "handshake-ai",
   "version": "1.0.0",
-  "description": "AI matchmaking agent for Kuzana/MiniHack community — your agent works the room so you don't have to",
+  "description": "AI matchmaking agent for MiniHack Kenya — your agent works the room so you don't have to",
   "main": "dist/index.js",
   "scripts": {
     "build": "tsc",

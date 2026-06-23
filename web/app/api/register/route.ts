@@ -16,11 +16,11 @@ async function fetchGitHubSummary(username: string): Promise<string> {
   try {
     const [userRes, reposRes] = await Promise.all([
       fetch(`https://api.github.com/users/${encodeURIComponent(username)}`, {
-        headers: { "User-Agent": "kuzana-connector" },
+        headers: { "User-Agent": "handshake-ai" },
       }),
       fetch(
         `https://api.github.com/users/${encodeURIComponent(username)}/repos?sort=stars&per_page=5&type=owner`,
-        { headers: { "User-Agent": "kuzana-connector" } }
+        { headers: { "User-Agent": "handshake-ai" } }
       ),
     ]);
     if (!userRes.ok) return "";
@@ -42,7 +42,7 @@ async function fetchGitHubSummary(username: string): Promise<string> {
 async function scrapeWebsite(url: string): Promise<string> {
   try {
     const res = await fetch(url, {
-      headers: { "User-Agent": "Mozilla/5.0 (compatible; KuzanaConnector/1.0)" },
+      headers: { "User-Agent": "Mozilla/5.0 (compatible; HandshakeAI/1.0)" },
       signal: AbortSignal.timeout(8000),
     });
     if (!res.ok) return "";

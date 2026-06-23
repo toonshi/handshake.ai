@@ -139,7 +139,7 @@ export async function createBot(): Promise<TelegramBot> {
 
       await bot.sendMessage(
         chatId,
-        `*Your Kuzana Connector Profile*
+        `*Your Handshake Profile*
 
 👤 *Name:* ${user.name}
 🏷 *Role:* ${user.role}
@@ -331,7 +331,7 @@ Your agent will reference this in introductions.`,
   bot.onText(/\/help/, async (msg) => {
     await bot.sendMessage(
       msg.chat.id,
-      `*Kuzana Connector Commands*
+      `*Handshake Commands*
 
 /start — Create your profile and activate your agent
 /status — View your profile and enrichments

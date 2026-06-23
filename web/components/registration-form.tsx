@@ -141,12 +141,12 @@ export default function RegistrationForm() {
           <p className="text-[#a1a1aa] text-sm max-w-sm">
             Your agent is active. Message{" "}
             <a
-              href="https://t.me/KuzanaConnectorBot"
+              href="https://t.me/HandshakeAIBot"
               target="_blank"
               rel="noopener noreferrer"
               className="text-white underline underline-offset-2"
             >
-              @KuzanaConnectorBot
+              @HandshakeAIBot
             </a>{" "}
             on Telegram to receive match notifications and voice introductions.
           </p>

@@ -204,7 +204,7 @@ export async function GET(req: NextRequest) {
     errors,
     results,
     next: [
-      "1. Message @KuzanaConnectorBot on Telegram — the bot will link your real telegram_id to your username",
+      "1. Message @HandshakeAIBot on Telegram — the bot will link your real telegram_id to your username",
       `2. POST /api/match with header: Authorization: Bearer <CRON_SECRET>`,
       "3. Watch Vercel logs to see agents negotiating live",
       "4. Check your Telegram for the match notification",
