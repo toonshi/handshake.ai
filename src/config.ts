@@ -45,8 +45,8 @@ export const config = {
     serviceKey: required('SUPABASE_SERVICE_KEY'),
   },
   elevenlabs: {
-    apiKey: required('ELEVENLABS_API_KEY'),
-    agentId: required('ELEVENLABS_AGENT_ID'),
+    apiKey: optional('ELEVENLABS_API_KEY', ''),
+    agentId: optional('ELEVENLABS_AGENT_ID', ''),
     agentTemplateId: optional('ELEVENLABS_AGENT_TEMPLATE_ID', ''),
   },
   matching: {

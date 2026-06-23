@@ -1,8 +1,6 @@
 import TelegramBot from 'node-telegram-bot-api';
 import { Match, User } from '../types';
 import { updateMatch, getUserById, getUserByTelegramId, setUserAcceptAll } from '../db/supabase';
-import { generateCallScripts } from '../introduction/callscript';
-import { initiateOutboundCall } from '../introduction/elevenlabs';
 
 let _bot: TelegramBot | null = null;
 
@@ -263,7 +261,7 @@ ${userB.telegram_username ? `Telegram: @${userB.telegram_username}` : 'No userna
 💬 *Open with:*
 _"${match.conversation_starter}"_
 
-${userA.phone_number ? 'We\'ll call you shortly with a full briefing.' : 'Add your phone number with /setphone to receive voice introductions next time.'}`;
+`;
 
   const telegramMessageB = `📞 *The intro is confirmed!*
 
@@ -272,42 +270,13 @@ ${userA.telegram_username ? `Telegram: @${userA.telegram_username}` : 'No userna
 
 💬 *Open with:*
 _"${match.conversation_starter}"_
-
-${userB.phone_number ? 'We\'ll call you shortly with a full briefing.' : 'Add your phone number with /setphone to receive voice introductions next time.'}`;
+`;
 
   await Promise.all([
     bot.sendMessage(userA.telegram_id, telegramMessageA, { parse_mode: 'Markdown' }),
     bot.sendMessage(userB.telegram_id, telegramMessageB, { parse_mode: 'Markdown' }),
   ]);
 
-  // Initiate ElevenLabs calls for users who have phone numbers
-  const callPromises: Promise<void>[] = [];
-
-  if (userA.phone_number) {
-    callPromises.push(
-      initiateOutboundCall(userA.phone_number, scripts.personAScript)
-        .then((convId) => {
-          console.log(`[Calls] Call initiated for ${userA.name}: ${convId}`);
-        })
-        .catch((err) => {
-          console.error(`[Calls] Failed to call ${userA.name}:`, err);
-        })
-    );
-  }
-
-  if (userB.phone_number) {
-    callPromises.push(
-      initiateOutboundCall(userB.phone_number, scripts.personBScript)
-        .then((convId) => {
-          console.log(`[Calls] Call initiated for ${userB.name}: ${convId}`);
-        })
-        .catch((err) => {
-          console.error(`[Calls] Failed to call ${userB.name}:`, err);
-        })
-    );
-  }
-
-  await Promise.all(callPromises);
   await updateMatch(match.id, { status: 'called' });
 }
 
