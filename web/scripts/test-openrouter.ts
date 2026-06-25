@@ -1,8 +1,8 @@
 import dotenv from "dotenv";
-import { generateGeminiText, streamGeminiText, generateGeminiEmbedding } from "../lib/gemini.js";
-
-// Load env vars
 dotenv.config({ path: ".env.local" });
+
+const { generateGeminiText, streamGeminiText, generateGeminiEmbedding } = await import("../lib/gemini.js");
+
 
 async function main() {
   console.log("──────────────────────────────────────────────────");

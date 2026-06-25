@@ -100,3 +100,33 @@ as $$
   order by challenge_embedding <=> query_embedding
   limit match_count;
 $$;
+
+-- Organizer Events table
+create table if not exists events (
+  id uuid primary key default gen_random_uuid(),
+  code text unique not null,
+  name text not null,
+  organizer_name text not null,
+  created_at timestamptz not null default now(),
+  ai_insights text
+);
+
+-- Event Custom Prompts table
+create table if not exists event_prompts (
+  id uuid primary key default gen_random_uuid(),
+  event_id uuid not null references events(id) on delete cascade,
+  prompt_text text not null,
+  order_index int not null,
+  created_at timestamptz not null default now()
+);
+
+-- User Event Responses table
+create table if not exists user_event_responses (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references users(id) on delete cascade,
+  event_id uuid not null references events(id) on delete cascade,
+  responses jsonb not null default '[]',
+  created_at timestamptz not null default now(),
+  unique(user_id, event_id)
+);
+

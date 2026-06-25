@@ -1,5 +1,5 @@
 import postgres from 'postgres';
-import { User, Match, ProfileEnrichments } from '../types';
+import { User, Match, ProfileEnrichments, Event, EventPrompt, UserEventResponse } from '../types';
 
 const DATABASE_URL =
   process.env.DATABASE_URL ??
@@ -131,6 +131,19 @@ export async function createMatch(
       ${JSON.stringify(data.shared_tech_stack ?? [])}::jsonb,
       ${data.status}, ${data.user_a_consent ?? false}, ${data.user_b_consent ?? false}
     )
+    ON CONFLICT (user_a_id, user_b_id) DO UPDATE SET
+      similarity_score = EXCLUDED.similarity_score,
+      agent_a_score = EXCLUDED.agent_a_score,
+      agent_b_score = EXCLUDED.agent_b_score,
+      transcript = EXCLUDED.transcript,
+      rationale = EXCLUDED.rationale,
+      conversation_starter = EXCLUDED.conversation_starter,
+      collaboration_opportunities = EXCLUDED.collaboration_opportunities,
+      shared_tech_stack = EXCLUDED.shared_tech_stack,
+      status = EXCLUDED.status,
+      user_a_consent = EXCLUDED.user_a_consent,
+      user_b_consent = EXCLUDED.user_b_consent,
+      updated_at = now()
     RETURNING *
   `;
   if (!rows[0]) throw new Error('Failed to create match');
@@ -236,3 +249,30 @@ export async function deleteOnboardingSession(telegramId: number): Promise<void>
   const sql = getDb();
   await sql`DELETE FROM onboarding_sessions WHERE telegram_id = ${telegramId}`;
 }
+
+// ─── Organizer Events & Prompts ─────────────────────────────────────────────
+
+export async function getEventByCode(code: string): Promise<Event | null> {
+  const sql = getDb();
+  const rows = await sql<Event[]>`SELECT * FROM events WHERE UPPER(code) = ${code.toUpperCase()} LIMIT 1`;
+  return rows[0] ?? null;
+}
+
+export async function getEventPrompts(eventId: string): Promise<EventPrompt[]> {
+  const sql = getDb();
+  return sql<EventPrompt[]>`SELECT * FROM event_prompts WHERE event_id = ${eventId} ORDER BY order_index ASC`;
+}
+
+export async function saveUserEventResponses(
+  userId: string,
+  eventId: string,
+  responses: Array<{ prompt_id: string; prompt_text: string; response_text: string }>
+): Promise<void> {
+  const sql = getDb();
+  await sql`
+    INSERT INTO user_event_responses (user_id, event_id, responses)
+    VALUES (${userId}, ${eventId}, ${JSON.stringify(responses)}::jsonb)
+    ON CONFLICT (user_id, event_id) DO UPDATE SET responses = EXCLUDED.responses, created_at = now()
+  `;
+}
+

@@ -1,7 +1,7 @@
 import Link from "next/link";
 import WalletConnect from "./wallet-connect";
 
-export default function SiteHeader({ active }: { active?: "home" | "live" }) {
+export default function SiteHeader({ active }: { active?: "home" | "live" | "organizer" }) {
   return (
     <header className="border-b border-[var(--border)] bg-[var(--bg)]/80 backdrop-blur-md sticky top-0 z-50">
       <div className="max-w-5xl mx-auto px-4 h-14 flex items-center justify-between gap-4">
@@ -17,6 +17,7 @@ export default function SiteHeader({ active }: { active?: "home" | "live" }) {
         <nav className="flex items-center gap-1">
           <NavLink href="/" active={active === "home"}>Register</NavLink>
           <NavLink href="/live" active={active === "live"}>Live demo</NavLink>
+          <NavLink href="/organizer" active={active === "organizer"}>Organizer</NavLink>
         </nav>
 
         <div className="shrink-0">

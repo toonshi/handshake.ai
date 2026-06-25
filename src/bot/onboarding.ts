@@ -94,3 +94,53 @@ Your agent is actively looking for matches. I'll message you when it finds someo
 
 Use /status to see your current profile, or /rematch to trigger matching manually.`;
 }
+
+const ENRICH_PROFILE_SYSTEM = `You are a profile synthesis assistant. You are given a user's current profile details (Name, Role, Working On/Description, Goals, Challenges, Offers) and a list of new event-specific questions and responses they just answered.
+Your task is to merge the event responses into their profile details. 
+- Retain existing details if they are still relevant.
+- Enrich details (especially Goals, Challenges, and Offers) with their specific event answers. E.g. if they say they use PETAL stack or need helper connections, integrate that into their offers or challenges.
+- Modify the 'description' to briefly sum up what they are pitching/working on right now at this event.
+
+Return valid JSON only (no markdown formatting, no code blocks):
+{
+  "name": "their full name",
+  "role": "their role",
+  "description": "updated description summarizing what they are working on, incorporating any new event pitch/project info",
+  "goals": "updated specific goals incorporating any new event goals/needs",
+  "challenges": "updated challenges incorporating any new huddles/struggles",
+  "offers": "updated offers incorporating any new skills/value they bring"
+}
+
+All fields are required. If no changes are needed for a field, keep it exactly as it is.`;
+
+export async function enrichProfileWithEventResponses(
+  currentUser: any,
+  responses: Array<{ prompt_id: string; prompt_text: string; response_text: string }>
+): Promise<ProfileData> {
+  const currentProfile = `Current Profile:
+Name: ${currentUser.name}
+Role: ${currentUser.role}
+Working On: ${currentUser.description}
+Goals: ${currentUser.goals}
+Challenges: ${currentUser.challenges}
+Offers: ${currentUser.offers}`;
+
+  const eventResponsesText = responses
+    .map((r) => `Q: ${r.prompt_text}\nA: ${r.response_text}`)
+    .join('\n\n');
+
+  const userMessage = `${currentProfile}\n\nEvent Responses:\n${eventResponsesText}`;
+
+  const text = await generateGeminiText(ENRICH_PROFILE_SYSTEM, [
+    { role: 'user', content: userMessage }
+  ], 800);
+
+  const cleaned = text.replace(/```(?:json)?\n?/g, '').replace(/```/g, '').trim();
+
+  try {
+    return JSON.parse(cleaned) as ProfileData;
+  } catch {
+    throw new Error(`Failed to parse enriched profile: ${cleaned}`);
+  }
+}
+

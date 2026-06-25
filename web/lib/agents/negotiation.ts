@@ -209,15 +209,17 @@ Agent A (${userA.name}): ${turn3}`;
 
 Agent B (${userB.name}): ${turn4}`;
 
-  // Scoring: both agents independently score in parallel
-  const [scoreARaw, scoreBRaw] = await Promise.all([
-    callGemini(agentASystem, [
-      { role: 'user', content: `${fullConversation}\n\n${buildScoringPrompt(userA, userB)}` },
-    ], 600, () => buildDemoScore(userA, userB)),
-    callGemini(agentBSystem, [
-      { role: 'user', content: `${fullConversation}\n\n${buildScoringPrompt(userB, userA)}` },
-    ], 600, () => buildDemoScore(userA, userB)),
-  ]);
+  // Scoring: both agents independently score sequentially
+  const scoreARaw = await callGemini(agentASystem, [
+    { role: 'user', content: `${fullConversation}\n\n${buildScoringPrompt(userA, userB)}` },
+  ], 600, () => buildDemoScore(userA, userB));
+
+  await new Promise((r) => setTimeout(r, 1000));
+
+  const scoreBRaw = await callGemini(agentBSystem, [
+    { role: 'user', content: `${fullConversation}\n\n${buildScoringPrompt(userB, userA)}` },
+  ], 600, () => buildDemoScore(userA, userB));
+
 
   const scoreA = parseAgentScore(scoreARaw);
   const scoreB = parseAgentScore(scoreBRaw);
@@ -248,7 +250,7 @@ export interface NegotiationCallbacks {
   onToken: (agent: 'A' | 'B', text: string) => void;
   onTurnEnd: (agent: 'A' | 'B', turn: number) => void;
   onScoring: () => void;
-  onResult: (result: NegotiationResult) => void;
+  onResult: (result: NegotiationResult) => Promise<void> | void;
 }
 
 export async function runAgentNegotiationStreaming(
@@ -296,6 +298,9 @@ export async function runAgentNegotiationStreaming(
   transcript.push({ agent: 'A', content: turn1 });
   callbacks.onTurnEnd('A', 1);
 
+  // Wait 1500ms to let rate limits clear
+  await new Promise((r) => setTimeout(r, 1500));
+
   // Turn 2: Agent B responds
   callbacks.onTurnStart('B', userB.name, 2);
   const turn2 = await doStream('B', agentBSystem,
@@ -309,6 +314,9 @@ Agent A (${userA.name}): ${turn1}
 Agent B (${userB.name}): ${turn2}
 === End transcript ===`;
 
+  // Wait 1500ms to let rate limits clear
+  await new Promise((r) => setTimeout(r, 1500));
+
   // Turn 3: Agent A proposes collaboration
   callbacks.onTurnStart('A', userA.name, 3);
   const turn3 = await doStream('A', agentASystem,
@@ -319,6 +327,9 @@ Agent B (${userB.name}): ${turn2}
   const conversationWithTurn3 = `${conversationSoFar}
 
 Agent A (${userA.name}): ${turn3}`;
+
+  // Wait 1500ms to let rate limits clear
+  await new Promise((r) => setTimeout(r, 1500));
 
   // Turn 4: Agent B confirms or refines
   callbacks.onTurnStart('B', userB.name, 4);
@@ -331,16 +342,21 @@ Agent A (${userA.name}): ${turn3}`;
 
 Agent B (${userB.name}): ${turn4}`;
 
+  // Wait 1500ms to let rate limits clear
+  await new Promise((r) => setTimeout(r, 1500));
+
   callbacks.onScoring();
 
-  const [scoreARaw, scoreBRaw] = await Promise.all([
-    callGemini(agentASystem, [
-      { role: 'user', content: `${fullConversation}\n\n${buildScoringPrompt(userA, userB)}` },
-    ], 600, () => buildDemoScore(userA, userB)),
-    callGemini(agentBSystem, [
-      { role: 'user', content: `${fullConversation}\n\n${buildScoringPrompt(userB, userA)}` },
-    ], 600, () => buildDemoScore(userA, userB)),
-  ]);
+  // Scoring: both agents score sequentially
+  const scoreARaw = await callGemini(agentASystem, [
+    { role: 'user', content: `${fullConversation}\n\n${buildScoringPrompt(userA, userB)}` },
+  ], 600, () => buildDemoScore(userA, userB));
+
+  await new Promise((r) => setTimeout(r, 1000));
+
+  const scoreBRaw = await callGemini(agentBSystem, [
+    { role: 'user', content: `${fullConversation}\n\n${buildScoringPrompt(userB, userA)}` },
+  ], 600, () => buildDemoScore(userA, userB));
 
   const scoreA = parseAgentScore(scoreARaw);
   const scoreB = parseAgentScore(scoreBRaw);
@@ -364,6 +380,6 @@ Agent B (${userB.name}): ${turn4}`;
     transcript,
   };
 
-  callbacks.onResult(result);
+  await callbacks.onResult(result);
   return result;
 }

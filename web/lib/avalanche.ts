@@ -53,12 +53,34 @@ export async function recordConnectionOnChain(
       client: thirdwebClient,
       chain: FUJI,
       address: contractAddress as `0x${string}`,
+      abi: [
+        {
+          inputs: [
+            { name: "userA", type: "address" },
+            { name: "userB", type: "address" },
+            { name: "matchId", type: "string" },
+          ],
+          name: "recordConnection",
+          outputs: [{ name: "id", type: "uint256" }],
+          stateMutability: "nonpayable",
+          type: "function",
+        },
+        {
+          inputs: [{ name: "matchId", type: "string" }],
+          name: "MatchAlreadyRecorded",
+          type: "error",
+        },
+        {
+          inputs: [],
+          name: "NotAuthorized",
+          type: "error",
+        }
+      ],
     });
 
     const tx = prepareContractCall({
       contract,
-      method:
-        "function recordConnection(address userA, address userB, string matchId) returns (uint256 id)",
+      method: "recordConnection",
       params: [addrA, addrB, matchId],
     });
 

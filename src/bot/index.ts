@@ -6,6 +6,7 @@ import {
   extractProfileFromHistory,
   getWelcomeMessage,
   getAlreadyRegisteredMessage,
+  enrichProfileWithEventResponses,
 } from './onboarding';
 import { setBotInstance, handleConsentCallback, handleFeedbackCallback } from './notifications';
 import {
@@ -16,15 +17,19 @@ import {
   getUserById,
   getMatchById,
   getDb,
+  getEventByCode,
+  getEventPrompts,
+  saveUserEventResponses,
 } from '../db/supabase';
 import { generateUserEmbeddings } from '../matching/embeddings';
 import { runMatchingCycle } from '../matching/scheduler';
 import { fetchGitHubProfile } from '../enrichment/github';
 import { scrapeAndExtract } from '../enrichment/scraper';
 import { parseResume, downloadTelegramFile } from '../enrichment/resume';
-import { OnboardingSession, ProfileEnrichments } from '../types';
+import { OnboardingSession, ProfileEnrichments, EventResponseSession } from '../types';
 
-const sessions = new Map<number, OnboardingSession>();
+type BotSession = OnboardingSession | EventResponseSession;
+const sessions = new Map<number, BotSession>();
 
 const ENRICHMENT_PROMPT = `
 🚀 *Supercharge your agent* — the more context it has, the better your matches:
@@ -325,6 +330,71 @@ Your agent will reference this in introductions.`,
     }
   });
 
+  // ─── /join <event_code> ────────────────────────────────────────────────────
+
+  bot.onText(/\/join(?:\s+(.+))?/, async (msg, match) => {
+    const chatId = msg.chat.id;
+    const telegramId = msg.from?.id;
+    if (!telegramId) return;
+
+    const eventCode = match?.[1]?.trim()?.toUpperCase();
+    if (!eventCode) {
+      await bot.sendMessage(chatId, '❌ Usage: `/join <event_code>`\nExample: `/join MINIHACK`', {
+        parse_mode: 'Markdown',
+      });
+      return;
+    }
+
+    try {
+      const user = await getUserByTelegramId(telegramId);
+      if (!user) {
+        await bot.sendMessage(
+          chatId,
+          '👋 You need to create your profile first before joining an event.\nUse `/start` to register!'
+        );
+        return;
+      }
+
+      const event = await getEventByCode(eventCode);
+      if (!event) {
+        await bot.sendMessage(chatId, `❌ Event *${eventCode}* not found. Please double-check the code.`, {
+          parse_mode: 'Markdown',
+        });
+        return;
+      }
+
+      const prompts = await getEventPrompts(event.id);
+      if (prompts.length === 0) {
+        await saveUserEventResponses(user.id, event.id, []);
+        await bot.sendMessage(
+          chatId,
+          `🎉 *Successfully joined event: ${event.name}!*\nThere are no custom prompt questions for this event, so you are good to go.`
+        );
+        return;
+      }
+
+      const session: EventResponseSession = {
+        type: 'event_response',
+        eventId: event.id,
+        eventCode: event.code,
+        eventName: event.name,
+        currentPromptIndex: 0,
+        prompts: prompts.map((p) => ({ id: p.id, prompt_text: p.prompt_text })),
+        responses: [],
+      };
+      sessions.set(telegramId, session);
+
+      await bot.sendMessage(
+        chatId,
+        `🎟️ *Joining event: ${event.name}*\n\nThe organizer *${event.organizer_name}* has requested you to answer a few quick questions.\n\n*Question 1:* ${prompts[0].prompt_text}`,
+        { parse_mode: 'Markdown' }
+      );
+    } catch (err) {
+      console.error('[Bot] /join error:', err);
+      await bot.sendMessage(chatId, '❌ Something went wrong while trying to join the event. Please try again.');
+    }
+  });
+
   // ─── /help ─────────────────────────────────────────────────────────────────
 
   bot.onText(/\/help/, async (msg) => {
@@ -337,6 +407,7 @@ Your agent will reference this in introductions.`,
 /github <username> — Add your GitHub profile
 /website <url> — Add your portfolio, startup, or social profile
 /setphone +254... — Add phone number for voice introductions
+/join <event_code> — Join a custom event and respond to organizer prompts
 /rematch — Trigger a matching cycle now
 /help — Show this message
 
@@ -449,13 +520,91 @@ Your agent will use this in introductions.`,
       return;
     }
 
+    if ('type' in session && session.type === 'event_response') {
+      try {
+        await bot.sendChatAction(chatId, 'typing');
+        const currentPrompt = session.prompts[session.currentPromptIndex];
+        session.responses.push({
+          prompt_id: currentPrompt.id,
+          prompt_text: currentPrompt.prompt_text,
+          response_text: msg.text,
+        });
+
+        const nextIndex = session.currentPromptIndex + 1;
+        if (nextIndex < session.prompts.length) {
+          session.currentPromptIndex = nextIndex;
+          await bot.sendMessage(
+            chatId,
+            `*Question ${nextIndex + 1}:* ${session.prompts[nextIndex].prompt_text}`,
+            { parse_mode: 'Markdown' }
+          );
+        } else {
+          sessions.delete(telegramId);
+          const user = await getUserByTelegramId(telegramId);
+          if (user) {
+            await saveUserEventResponses(user.id, session.eventId, session.responses);
+            await bot.sendMessage(
+              chatId,
+              `🎉 *Event Registration Complete!*\n\nThank you for responding. Your details have been submitted to the event organizers for *${session.eventName}*.`,
+              { parse_mode: 'Markdown' }
+            );
+
+            // Synthesize responses with profile and regenerate embeddings
+            try {
+              await bot.sendChatAction(chatId, 'typing');
+              await bot.sendMessage(chatId, '🧠 _Updating your matchmaking agent with event-specific context..._');
+              
+              const enriched = await enrichProfileWithEventResponses(user, session.responses);
+              
+              const sql = getDb();
+              await sql`
+                UPDATE users SET
+                  name = ${enriched.name},
+                  role = ${enriched.role},
+                  description = ${enriched.description},
+                  goals = ${enriched.goals},
+                  challenges = ${enriched.challenges},
+                  offers = ${enriched.offers},
+                  updated_at = now()
+                WHERE id = ${user.id}
+              `;
+
+              const { goalEmbedding, challengeEmbedding } = await generateUserEmbeddings(
+                enriched.goals,
+                enriched.challenges
+              );
+              await updateUserEmbeddings(user.id, goalEmbedding, challengeEmbedding);
+
+              await bot.sendMessage(
+                chatId,
+                `🧠 *Agent Upgraded!* Your matchmaking agent is now actively matching you at *${session.eventName}* using this new context. 🚀`,
+                { parse_mode: 'Markdown' }
+              );
+            } catch (enrichErr) {
+              console.error('[Bot] Event profile enrichment failed:', enrichErr);
+            }
+          } else {
+            await bot.sendMessage(
+              chatId,
+              `❌ Failed to save your responses: user profile not found. Please do /start first.`
+            );
+          }
+        }
+      } catch (err) {
+        console.error('[Bot] Event message processing error:', err);
+        await bot.sendMessage(chatId, '❌ Something went wrong while saving your response. Please try again.');
+      }
+      return;
+    }
+
     try {
       await bot.sendChatAction(chatId, 'typing');
 
-      const result = await conductInterview(session, msg.text);
+      const onboardingSession = session as OnboardingSession;
+      const result = await conductInterview(onboardingSession, msg.text);
 
-      session.history.push({ role: 'user', content: msg.text });
-      session.history.push({ role: 'assistant', content: result.response });
+      onboardingSession.history.push({ role: 'user', content: msg.text });
+      onboardingSession.history.push({ role: 'assistant', content: result.response });
 
       await bot.sendMessage(chatId, result.response, { parse_mode: 'Markdown' });
 
@@ -467,7 +616,7 @@ Your agent will use this in introductions.`,
         });
 
         try {
-          const profileData = await extractProfileFromHistory(session.history);
+          const profileData = await extractProfileFromHistory(onboardingSession.history);
 
           const user = await upsertUser({
             telegram_id: telegramId,

@@ -10,6 +10,11 @@ interface CallbackQuery {
   data?: string;
 }
 
+const esc = (unsafe: string) => unsafe
+  .replace(/&/g, "&amp;")
+  .replace(/</g, "&lt;")
+  .replace(/>/g, "&gt;");
+
 function buildMatchMessage(
   matchedUser: User,
   match: Match,
@@ -33,21 +38,21 @@ function buildMatchMessage(
   // party param is used to label the callback data
   void party;
 
-  return `🤝 *Your agent found a match.*
+  return `🤝 <b>Your agent found a match.</b>
 
-*${matchedUser.name}* · ${matchedUser.role}
+<b>${esc(matchedUser.name)}</b> · ${esc(matchedUser.role)}
 
-📋 *Why:*
-${rationaleText}
+📋 <b>Why:</b>
+${esc(rationaleText)}
 
-🛠 *Shared / complementary tech:*
-${techStack}
+🛠 <b>Shared / complementary tech:</b>
+${esc(techStack)}
 
-🎯 *Collaboration opportunities:*
-${opportunities}
+🎯 <b>Collaboration opportunities:</b>
+${esc(opportunities)}
 
-💬 *Open with:*
-_"${match.conversation_starter}"_`;
+💬 <b>Open with:</b>
+<i>"${esc(match.conversation_starter)}"</i>`;
 }
 
 export async function sendMatchNotification(
@@ -80,13 +85,17 @@ export async function sendMatchNotification(
 
   await Promise.all([
     sendMessage(userA.telegram_id, messageA, {
-      parse_mode: 'Markdown',
+      parse_mode: 'HTML',
       reply_markup: inlineKeyboardA,
-    }),
+    }).catch((err) =>
+      console.error(`[Notifications] Failed to send match notification to User A (${userA.name}):`, err)
+    ),
     sendMessage(userB.telegram_id, messageB, {
-      parse_mode: 'Markdown',
+      parse_mode: 'HTML',
       reply_markup: inlineKeyboardB,
-    }),
+    }).catch((err) =>
+      console.error(`[Notifications] Failed to send match notification to User B (${userB.name}):`, err)
+    ),
   ]);
 
   console.log(`[Notifications] Sent match notifications for match ${match.id}`);
@@ -111,7 +120,7 @@ export async function sendMatchNotificationToUser(
   };
 
   await sendMessage(notifyUser.telegram_id, message, {
-    parse_mode: 'Markdown',
+    parse_mode: 'HTML',
     reply_markup: inlineKeyboard,
   });
 
@@ -137,31 +146,34 @@ export async function initiateCallsForMatch(match: Match): Promise<void> {
 
   // Send Telegram message with other person's contact
   const chainLine = txHash
-    ? `\n⛓ *On Avalanche:* [View transaction](${snowtraceUrl(txHash)})`
+    ? `\n⛓ <b>On Avalanche:</b> <a href="${snowtraceUrl(txHash)}">View transaction</a>`
     : '';
 
-  const telegramMessageA = `📞 *The intro is confirmed!*
+  const telegramMessageA = `📞 <b>The intro is confirmed!</b>
 
-Here's ${userB.name}'s info:
-${userB.telegram_username ? `Telegram: @${userB.telegram_username}` : 'No username — ask me if you need help connecting'}${userB.wallet_address ? `\nAVAX wallet: \`${userB.wallet_address}\`` : ''}${chainLine}
+Here's ${esc(userB.name)}'s info:
+${userB.telegram_username ? `Telegram: @${esc(userB.telegram_username)}` : 'No username — ask me if you need help connecting'}${userB.wallet_address ? `\nAVAX wallet: <code>${esc(userB.wallet_address)}</code>` : ''}${chainLine}
 
-💬 *Open with:*
-_"${match.conversation_starter}"_
-
+💬 <b>Open with:</b>
+<i>"${esc(match.conversation_starter)}"</i>
 `;
 
-  const telegramMessageB = `📞 *The intro is confirmed!*
+  const telegramMessageB = `📞 <b>The intro is confirmed!</b>
 
-Here's ${userA.name}'s info:
-${userA.telegram_username ? `Telegram: @${userA.telegram_username}` : 'No username — ask me if you need help connecting'}${userA.wallet_address ? `\nAVAX wallet: \`${userA.wallet_address}\`` : ''}${chainLine}
+Here's ${esc(userA.name)}'s info:
+${userA.telegram_username ? `Telegram: @${esc(userA.telegram_username)}` : 'No username — ask me if you need help connecting'}${userA.wallet_address ? `\nAVAX wallet: <code>${esc(userA.wallet_address)}</code>` : ''}${chainLine}
 
-💬 *Open with:*
-_"${match.conversation_starter}"_
+💬 <b>Open with:</b>
+<i>"${esc(match.conversation_starter)}"</i>
 `;
 
   await Promise.all([
-    sendMessage(userA.telegram_id, telegramMessageA, { parse_mode: 'Markdown' }),
-    sendMessage(userB.telegram_id, telegramMessageB, { parse_mode: 'Markdown' }),
+    sendMessage(userA.telegram_id, telegramMessageA, { parse_mode: 'HTML' }).catch((err) =>
+      console.error(`[Notifications] Failed to send intro A to ${userA.name}:`, err)
+    ),
+    sendMessage(userB.telegram_id, telegramMessageB, { parse_mode: 'HTML' }).catch((err) =>
+      console.error(`[Notifications] Failed to send intro B to ${userB.name}:`, err)
+    ),
   ]);
 
   await updateMatch(match.id, { status: 'called' });

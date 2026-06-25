@@ -1,5 +1,5 @@
 import postgres from 'postgres';
-import { User, Match, ProfileEnrichments } from './types';
+import { User, Match, ProfileEnrichments, Event, EventPrompt, UserEventResponse } from './types';
 
 const sql = postgres(process.env.DATABASE_URL!, { ssl: false, max: 10 });
 
@@ -136,6 +136,19 @@ export async function createMatch(
       ${sql.json((data.shared_tech_stack ?? []) as unknown as postgres.JSONValue)},
       ${data.status}, ${data.user_a_consent}, ${data.user_b_consent}
     )
+    ON CONFLICT (user_a_id, user_b_id) DO UPDATE SET
+      similarity_score = EXCLUDED.similarity_score,
+      agent_a_score = EXCLUDED.agent_a_score,
+      agent_b_score = EXCLUDED.agent_b_score,
+      transcript = EXCLUDED.transcript,
+      rationale = EXCLUDED.rationale,
+      conversation_starter = EXCLUDED.conversation_starter,
+      collaboration_opportunities = EXCLUDED.collaboration_opportunities,
+      shared_tech_stack = EXCLUDED.shared_tech_stack,
+      status = EXCLUDED.status,
+      user_a_consent = EXCLUDED.user_a_consent,
+      user_b_consent = EXCLUDED.user_b_consent,
+      updated_at = now()
     RETURNING *
   `;
   return rows[0];
@@ -215,3 +228,64 @@ export async function saveOnboardingSession(
 export async function deleteOnboardingSession(telegramId: number): Promise<void> {
   await sql`DELETE FROM onboarding_sessions WHERE telegram_id = ${telegramId}`;
 }
+
+// ─── Organizer Events & Prompts ─────────────────────────────────────────────
+
+export async function getEvents(): Promise<Event[]> {
+  return sql<Event[]>`SELECT * FROM events ORDER BY created_at DESC`;
+}
+
+export async function getEventByCode(code: string): Promise<Event | null> {
+  const rows = await sql<Event[]>`SELECT * FROM events WHERE UPPER(code) = ${code.toUpperCase()} LIMIT 1`;
+  return rows[0] ?? null;
+}
+
+export async function getEventPrompts(eventId: string): Promise<EventPrompt[]> {
+  return sql<EventPrompt[]>`SELECT * FROM event_prompts WHERE event_id = ${eventId} ORDER BY order_index ASC`;
+}
+
+export async function createEvent(code: string, name: string, organizerName: string): Promise<Event> {
+  const rows = await sql<Event[]>`
+    INSERT INTO events (code, name, organizer_name)
+    VALUES (${code.toUpperCase()}, ${name}, ${organizerName})
+    RETURNING *
+  `;
+  return rows[0];
+}
+
+export async function updateEventPrompts(eventId: string, prompts: string[]): Promise<void> {
+  await sql.begin(async (tx) => {
+    await tx`DELETE FROM event_prompts WHERE event_id = ${eventId}`;
+    if (prompts.length > 0) {
+      const rows = prompts.map((promptText, index) => ({
+        event_id: eventId,
+        prompt_text: promptText,
+        order_index: index,
+      }));
+      await tx`INSERT INTO event_prompts ${tx(rows, 'event_id', 'prompt_text', 'order_index')}`;
+    }
+  });
+}
+
+export async function getUserEventResponses(eventId: string): Promise<UserEventResponse[]> {
+  return sql<UserEventResponse[]>`
+    SELECT 
+      uer.id,
+      uer.user_id,
+      uer.event_id,
+      uer.responses,
+      uer.created_at,
+      u.name as user_name,
+      u.telegram_username as user_username
+    FROM user_event_responses uer
+    JOIN users u ON uer.user_id = u.id
+    WHERE uer.event_id = ${eventId}
+    ORDER BY uer.created_at DESC
+  `;
+}
+
+export async function updateEventInsights(eventId: string, insights: string): Promise<void> {
+  await sql`UPDATE events SET ai_insights = ${insights} WHERE id = ${eventId}`;
+}
+
+
