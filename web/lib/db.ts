@@ -1,7 +1,8 @@
 import postgres from 'postgres';
 import { User, Match, ProfileEnrichments, Event, EventPrompt, UserEventResponse } from './types';
 
-const sql = postgres(process.env.DATABASE_URL!, { ssl: false, max: 10 });
+const isProd = process.env.NODE_ENV === 'production' || !!process.env.VERCEL;
+const sql = postgres(process.env.DATABASE_URL!, { ssl: isProd ? 'require' : false, max: 10 });
 
 // ─── Users ────────────────────────────────────────────────────────────────────
 

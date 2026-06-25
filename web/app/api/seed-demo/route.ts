@@ -2,7 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import postgres from "postgres";
 import { generateGeminiEmbedding } from "@/lib/gemini";
 
-const sql = postgres(process.env.DATABASE_URL!, { ssl: false, max: 5 });
+const isProd = process.env.NODE_ENV === 'production' || !!process.env.VERCEL;
+const sql = postgres(process.env.DATABASE_URL!, { ssl: isProd ? 'require' : false, max: 5 });
 
 // Demo personas designed to produce high-confidence agent matches.
 // Three natural pairs:
@@ -191,4 +192,8 @@ function hashCode(str: string): number {
     hash = (Math.imul(31, hash) + str.charCodeAt(i)) | 0;
   }
   return hash;
+}
+
+export async function POST(req: NextRequest) {
+  return GET(req);
 }
