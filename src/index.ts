@@ -1,22 +1,38 @@
+import dns from 'dns';
+if (typeof dns.setDefaultResultOrder === 'function') {
+  dns.setDefaultResultOrder('ipv4first');
+}
+
 import { createBot } from './bot';
 import { startMatchingScheduler, runMatchingCycle } from './matching/scheduler';
 
 async function main(): Promise<void> {
-  console.log('🚀 Kuzana Connector starting...');
+  console.log('🚀 Handshake starting...');
   console.log('"Your agent works the room so you don\'t have to."');
   console.log('');
 
   // Validate config early
   const { config } = await import('./config');
+  if (!config.openrouter.apiKey && !config.gemini.apiKey) {
+    throw new Error('Either OPENROUTER_API_KEY or GEMINI_API_KEY must be provided in your .env configuration.');
+  }
   console.log(`[Config] Telegram bot token: ...${config.telegram.token.slice(-6)}`);
-  console.log(`[Config] Gemini text model: ${config.gemini.textModel}`);
+  if (config.openrouter.apiKey) {
+    console.log(`[Config] LLM Provider: OpenRouter (${config.openrouter.model})`);
+  } else {
+    console.log(`[Config] LLM Provider: Gemini (${config.gemini.textModel})`);
+  }
   console.log(`[Config] Match threshold: ${config.matching.scoreThreshold}`);
   console.log(`[Config] Matching cron: ${config.matching.cronSchedule}`);
   console.log('');
 
-  // Start Telegram bot
-  const bot = createBot();
-  console.log('✅ Telegram bot started (polling)');
+  // Start Telegram bot (polling locally, or no-op when webhook mode)
+  const bot = await createBot();
+  if (config.telegram.usePolling) {
+    console.log('✅ Telegram bot started (polling)');
+  } else {
+    console.log('✅ Telegram bot instance ready (webhook mode — no local polling)');
+  }
 
   // Start matching scheduler
   startMatchingScheduler();
@@ -31,18 +47,18 @@ async function main(): Promise<void> {
   }, 10_000);
 
   console.log('');
-  console.log('✅ Kuzana Connector is live. Waiting for users...');
+  console.log('✅ Handshake is live. Waiting for users...');
 
   // Graceful shutdown
   process.on('SIGTERM', () => {
     console.log('SIGTERM received, shutting down...');
-    bot.stopPolling();
+    if (config.telegram.usePolling) bot.stopPolling();
     process.exit(0);
   });
 
   process.on('SIGINT', () => {
     console.log('SIGINT received, shutting down...');
-    bot.stopPolling();
+    if (config.telegram.usePolling) bot.stopPolling();
     process.exit(0);
   });
 }
@@ -51,3 +67,4 @@ main().catch((err) => {
   console.error('Fatal error:', err);
   process.exit(1);
 });
+

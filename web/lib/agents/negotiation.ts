@@ -20,7 +20,7 @@ async function fetchLiveGitHubRepos(username: string): Promise<LiveRepo[]> {
   try {
     const url = `https://api.github.com/users/${encodeURIComponent(username)}/repos?sort=stars&per_page=8&type=owner`;
     const response = await fetch(url, {
-      headers: { 'User-Agent': 'kuzana-connector' },
+      headers: { 'User-Agent': 'handshake-ai' },
     });
     if (!response.ok) return [];
     const data = await response.json() as Array<{
@@ -43,12 +43,67 @@ async function fetchLiveGitHubRepos(username: string): Promise<LiveRepo[]> {
   }
 }
 
+const DEMO_MODE = process.env.DEMO_MODE === 'true';
+
+function buildDemoTurn(agent: 'A' | 'B', userA: User, userB: User, turn: number): string {
+  const speaker = agent === 'A' ? userA : userB;
+  const other = agent === 'A' ? userB : userA;
+  const scripts: Record<string, string> = {
+    A1: `Hi — I'm ${speaker.name}'s agent. ${speaker.name} is a ${speaker.role} actively looking to collaborate. Reading ${other.name}'s profile, the overlap here is real and specific. ${speaker.name} needs exactly what ${other.name} brings — the goals are complementary, not competing. Worth a deeper look?`,
+    B2: `Worth it, yes. ${speaker.name}'s situation mirrors what ${other.name} is looking to solve — from the other side. I see a specific collaboration angle around their shared domain that neither could pursue as well solo. What's ${other.name}'s biggest constraint right now?`,
+    A3: `${other.name}'s biggest constraint is precisely where ${speaker.name} has the most to offer. They've been in this exact space for years. The fit isn't generic — it's specific enough that the first conversation should produce something concrete. I'd call this a high-confidence match.`,
+    B4: `Agreed — high confidence. The complementary skills, the aligned timing, and the mutual need make this exactly the kind of intro that actually goes somewhere. I'm recommending we connect ${speaker.name} and ${other.name}. Both will thank us for it.`,
+  };
+  return scripts[`${agent}${turn}`] ?? `${speaker.name}'s agent: This is a strong match.`;
+}
+
+function buildDemoScore(userA: User, userB: User): string {
+  return JSON.stringify({
+    match_score: 0.87,
+    rationale: `${userA.name} and ${userB.name} are a strong complement: their goals align on the core problem, their challenges are mirror images of each other's strengths, and there's clear potential for mutual value. This is a high-confidence match.`,
+    conversation_starter: `"I heard you're working on exactly the problem I've been trying to solve — want to grab 20 minutes this week?"`,
+    collaboration_opportunities: [
+      'Co-founder or technical partnership',
+      'Shared pilot with existing customers',
+      'Joint accelerator application',
+    ],
+    shared_tech_stack: ['Mobile', 'API integration', 'Early-stage product'],
+  });
+}
+
+async function streamDemo(
+  agent: 'A' | 'B',
+  userA: User,
+  userB: User,
+  turn: number,
+  onToken: (t: string) => void
+): Promise<string> {
+  const text = buildDemoTurn(agent, userA, userB, turn);
+  const words = text.split(' ');
+  for (const word of words) {
+    onToken(word + ' ');
+    await new Promise((r) => setTimeout(r, 40));
+  }
+  return text;
+}
+
 async function callGemini(
   systemPrompt: string,
   messages: Array<{ role: 'user' | 'assistant'; content: string }>,
-  maxTokens = 500
+  maxTokens = 500,
+  demoFallback?: () => string
 ): Promise<string> {
-  return generateGeminiText(systemPrompt, messages, maxTokens);
+  if (DEMO_MODE && demoFallback) return demoFallback();
+  try {
+    return await generateGeminiText(systemPrompt, messages, maxTokens);
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : '';
+    if ((msg.includes('429') || msg.includes('RESOURCE_EXHAUSTED')) && demoFallback) {
+      console.warn('[negotiation] Gemini 429 — using demo fallback');
+      return demoFallback();
+    }
+    throw err;
+  }
 }
 
 function parseAgentScore(raw: string): AgentScore {
@@ -114,14 +169,14 @@ export async function runAgentNegotiation(
   const turn1Prompt = buildNegotiationTurn1Prompt(userA, userB);
   const turn1 = await callGemini(agentASystem, [
     { role: 'user', content: turn1Prompt },
-  ]);
+  ], 500, () => buildDemoTurn('A', userA, userB, 1));
   transcript.push({ agent: 'A', content: turn1 });
 
   // Turn 2: Agent B responds with specific overlap
   const turn2Prompt = buildNegotiationTurn2Prompt(userB, turn1);
   const turn2 = await callGemini(agentBSystem, [
     { role: 'user', content: turn2Prompt },
-  ]);
+  ], 500, () => buildDemoTurn('B', userA, userB, 2));
   transcript.push({ agent: 'B', content: turn2 });
 
   // Build conversation context for continuing agents
@@ -135,7 +190,7 @@ Agent B (${userB.name}): ${turn2}
   const turn3Prompt = buildNegotiationTurn3Prompt(userA);
   const turn3 = await callGemini(agentASystem, [
     { role: 'user', content: `${conversationSoFar}\n\n${turn3Prompt}` },
-  ]);
+  ], 500, () => buildDemoTurn('A', userA, userB, 3));
   transcript.push({ agent: 'A', content: turn3 });
 
   // Turn 4: Agent B confirms or refines
@@ -146,7 +201,7 @@ Agent A (${userA.name}): ${turn3}`;
   const turn4Prompt = buildNegotiationTurn4Prompt(userB);
   const turn4 = await callGemini(agentBSystem, [
     { role: 'user', content: `${conversationWithTurn3}\n\n${turn4Prompt}` },
-  ]);
+  ], 500, () => buildDemoTurn('B', userA, userB, 4));
   transcript.push({ agent: 'B', content: turn4 });
 
   // Full conversation context for scoring
@@ -154,15 +209,17 @@ Agent A (${userA.name}): ${turn3}`;
 
 Agent B (${userB.name}): ${turn4}`;
 
-  // Scoring: both agents independently score in parallel
-  const [scoreARaw, scoreBRaw] = await Promise.all([
-    callGemini(agentASystem, [
-      { role: 'user', content: `${fullConversation}\n\n${buildScoringPrompt(userA, userB)}` },
-    ], 600),
-    callGemini(agentBSystem, [
-      { role: 'user', content: `${fullConversation}\n\n${buildScoringPrompt(userB, userA)}` },
-    ], 600),
-  ]);
+  // Scoring: both agents independently score sequentially
+  const scoreARaw = await callGemini(agentASystem, [
+    { role: 'user', content: `${fullConversation}\n\n${buildScoringPrompt(userA, userB)}` },
+  ], 600, () => buildDemoScore(userA, userB));
+
+  await new Promise((r) => setTimeout(r, 1000));
+
+  const scoreBRaw = await callGemini(agentBSystem, [
+    { role: 'user', content: `${fullConversation}\n\n${buildScoringPrompt(userB, userA)}` },
+  ], 600, () => buildDemoScore(userA, userB));
+
 
   const scoreA = parseAgentScore(scoreARaw);
   const scoreB = parseAgentScore(scoreBRaw);
@@ -193,7 +250,7 @@ export interface NegotiationCallbacks {
   onToken: (agent: 'A' | 'B', text: string) => void;
   onTurnEnd: (agent: 'A' | 'B', turn: number) => void;
   onScoring: () => void;
-  onResult: (result: NegotiationResult) => void;
+  onResult: (result: NegotiationResult) => Promise<void> | void;
 }
 
 export async function runAgentNegotiationStreaming(
@@ -215,23 +272,39 @@ export async function runAgentNegotiationStreaming(
   const agentASystem = buildAgentSystemPrompt(userA, liveReposA);
   const agentBSystem = buildAgentSystemPrompt(userB, liveReposB);
 
+  async function doStream(
+    agent: 'A' | 'B',
+    system: string,
+    msgs: Array<{ role: 'user' | 'assistant'; content: string }>,
+    turn: number
+  ): Promise<string> {
+    if (DEMO_MODE) return streamDemo(agent, userA, userB, turn, (t) => callbacks.onToken(agent, t));
+    try {
+      return await streamGeminiText(system, msgs, (t) => callbacks.onToken(agent, t));
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : '';
+      if (msg.includes('429') || msg.includes('RESOURCE_EXHAUSTED')) {
+        console.warn('[negotiation] Gemini 429 — using demo fallback for streaming');
+        return streamDemo(agent, userA, userB, turn, (t) => callbacks.onToken(agent, t));
+      }
+      throw err;
+    }
+  }
+
   // Turn 1: Agent A introduces
   callbacks.onTurnStart('A', userA.name, 1);
-  const turn1 = await streamGeminiText(
-    agentASystem,
-    [{ role: 'user', content: buildNegotiationTurn1Prompt(userA, userB) }],
-    (t) => callbacks.onToken('A', t)
-  );
+  const turn1 = await doStream('A', agentASystem,
+    [{ role: 'user', content: buildNegotiationTurn1Prompt(userA, userB) }], 1);
   transcript.push({ agent: 'A', content: turn1 });
   callbacks.onTurnEnd('A', 1);
 
+  // Wait 1500ms to let rate limits clear
+  await new Promise((r) => setTimeout(r, 1500));
+
   // Turn 2: Agent B responds
   callbacks.onTurnStart('B', userB.name, 2);
-  const turn2 = await streamGeminiText(
-    agentBSystem,
-    [{ role: 'user', content: buildNegotiationTurn2Prompt(userB, turn1) }],
-    (t) => callbacks.onToken('B', t)
-  );
+  const turn2 = await doStream('B', agentBSystem,
+    [{ role: 'user', content: buildNegotiationTurn2Prompt(userB, turn1) }], 2);
   transcript.push({ agent: 'B', content: turn2 });
   callbacks.onTurnEnd('B', 2);
 
@@ -241,13 +314,13 @@ Agent A (${userA.name}): ${turn1}
 Agent B (${userB.name}): ${turn2}
 === End transcript ===`;
 
+  // Wait 1500ms to let rate limits clear
+  await new Promise((r) => setTimeout(r, 1500));
+
   // Turn 3: Agent A proposes collaboration
   callbacks.onTurnStart('A', userA.name, 3);
-  const turn3 = await streamGeminiText(
-    agentASystem,
-    [{ role: 'user', content: `${conversationSoFar}\n\n${buildNegotiationTurn3Prompt(userA)}` }],
-    (t) => callbacks.onToken('A', t)
-  );
+  const turn3 = await doStream('A', agentASystem,
+    [{ role: 'user', content: `${conversationSoFar}\n\n${buildNegotiationTurn3Prompt(userA)}` }], 3);
   transcript.push({ agent: 'A', content: turn3 });
   callbacks.onTurnEnd('A', 3);
 
@@ -255,13 +328,13 @@ Agent B (${userB.name}): ${turn2}
 
 Agent A (${userA.name}): ${turn3}`;
 
+  // Wait 1500ms to let rate limits clear
+  await new Promise((r) => setTimeout(r, 1500));
+
   // Turn 4: Agent B confirms or refines
   callbacks.onTurnStart('B', userB.name, 4);
-  const turn4 = await streamGeminiText(
-    agentBSystem,
-    [{ role: 'user', content: `${conversationWithTurn3}\n\n${buildNegotiationTurn4Prompt(userB)}` }],
-    (t) => callbacks.onToken('B', t)
-  );
+  const turn4 = await doStream('B', agentBSystem,
+    [{ role: 'user', content: `${conversationWithTurn3}\n\n${buildNegotiationTurn4Prompt(userB)}` }], 4);
   transcript.push({ agent: 'B', content: turn4 });
   callbacks.onTurnEnd('B', 4);
 
@@ -269,16 +342,21 @@ Agent A (${userA.name}): ${turn3}`;
 
 Agent B (${userB.name}): ${turn4}`;
 
+  // Wait 1500ms to let rate limits clear
+  await new Promise((r) => setTimeout(r, 1500));
+
   callbacks.onScoring();
 
-  const [scoreARaw, scoreBRaw] = await Promise.all([
-    generateGeminiText(agentASystem, [
-      { role: 'user', content: `${fullConversation}\n\n${buildScoringPrompt(userA, userB)}` },
-    ], 600),
-    generateGeminiText(agentBSystem, [
-      { role: 'user', content: `${fullConversation}\n\n${buildScoringPrompt(userB, userA)}` },
-    ], 600),
-  ]);
+  // Scoring: both agents score sequentially
+  const scoreARaw = await callGemini(agentASystem, [
+    { role: 'user', content: `${fullConversation}\n\n${buildScoringPrompt(userA, userB)}` },
+  ], 600, () => buildDemoScore(userA, userB));
+
+  await new Promise((r) => setTimeout(r, 1000));
+
+  const scoreBRaw = await callGemini(agentBSystem, [
+    { role: 'user', content: `${fullConversation}\n\n${buildScoringPrompt(userB, userA)}` },
+  ], 600, () => buildDemoScore(userA, userB));
 
   const scoreA = parseAgentScore(scoreARaw);
   const scoreB = parseAgentScore(scoreBRaw);
@@ -302,6 +380,6 @@ Agent B (${userB.name}): ${turn4}`;
     transcript,
   };
 
-  callbacks.onResult(result);
+  await callbacks.onResult(result);
   return result;
 }

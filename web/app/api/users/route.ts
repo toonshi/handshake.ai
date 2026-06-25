@@ -1,21 +1,18 @@
 import { NextResponse } from "next/server";
-import { createClient } from "@supabase/supabase-js";
+import postgres from "postgres";
+
+const sql = postgres(process.env.DATABASE_URL!, { ssl: false, max: 5 });
 
 export async function GET() {
-  const supabase = createClient(
-    process.env.SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_KEY!,
-    { auth: { persistSession: false } }
-  );
-
-  const { data, error } = await supabase
-    .from("users")
-    .select("id, name, role, description, telegram_username")
-    .order("name");
-
-  if (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+  try {
+    const users = await sql`
+      SELECT id, name, role, description, telegram_username
+      FROM users
+      ORDER BY name
+    `;
+    return NextResponse.json({ users });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "Internal error";
+    return NextResponse.json({ error: message }, { status: 500 });
   }
-
-  return NextResponse.json({ users: data ?? [] });
 }

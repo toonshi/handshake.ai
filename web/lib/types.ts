@@ -35,6 +35,7 @@ export interface Match {
   user_b_consent: boolean;
   user_a_feedback?: number;
   user_b_feedback?: number;
+  tx_hash?: string;
   created_at: string;
   updated_at: string;
 }
@@ -50,8 +51,10 @@ export type MatchStatus =
   | 'declined';
 
 export interface AgentTurn {
-  agent: 'A' | 'B';
-  content: string;
+  agent: 'A' | 'B' | 'META';
+  content?: string;
+  collaboration_opportunities?: string[];
+  shared_tech_stack?: string[];
 }
 
 export interface NegotiationResult {
@@ -141,3 +144,32 @@ export interface ProfileEnrichments {
   websites: WebsiteEnrichment[];
   resume?: ResumeEnrichment;
 }
+
+export interface Event {
+  id: string;
+  code: string;
+  name: string;
+  organizer_name: string;
+  created_at: string;
+  ai_insights?: string;
+}
+
+export interface EventPrompt {
+  id: string;
+  event_id: string;
+  prompt_text: string;
+  order_index: number;
+  created_at: string;
+}
+
+export interface UserEventResponse {
+  id: string;
+  user_id: string;
+  event_id: string;
+  responses: Array<{ prompt_id: string; prompt_text: string; response_text: string }>;
+  created_at: string;
+  // enriched fields
+  user_name?: string;
+  user_username?: string;
+}
+

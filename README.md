@@ -4,6 +4,14 @@
 
 AI-powered matchmaking for the Kuzana/MiniHack Kenya community. Instead of introducing you to people, it builds you an agent — and that agent negotiates introductions on your behalf.
 
+## Screenshots
+
+<p align="center">
+  <img src="docs/images/hnd.png" width="32%" alt="Onboarding Bot" />
+  <img src="docs/images/comp.png" width="32%" alt="Agent Negotiation Dashboard" />
+  <img src="docs/images/conn.png" width="32%" alt="Telegram Introduction Confirm" />
+</p>
+
 ---
 
 ## How It Works

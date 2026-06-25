@@ -19,7 +19,7 @@ interface GitHubRepo {
 export async function fetchGitHubProfile(username: string): Promise<GitHubEnrichment> {
   const headers: Record<string, string> = {
     Accept: 'application/vnd.github.v3+json',
-    'User-Agent': 'kuzana-connector',
+    'User-Agent': 'handshake-ai',
   };
 
   const [userRes, reposRes] = await Promise.all([

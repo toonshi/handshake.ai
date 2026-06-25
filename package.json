@@ -1,7 +1,7 @@
 {
-  "name": "kuzana-connector",
+  "name": "handshake-ai",
   "version": "1.0.0",
-  "description": "AI matchmaking agent for Kuzana/MiniHack community — your agent works the room so you don't have to",
+  "description": "AI matchmaking agent for MiniHack Kenya — your agent works the room so you don't have to",
   "main": "dist/index.js",
   "scripts": {
     "build": "tsc",
@@ -12,7 +12,9 @@
     "@supabase/supabase-js": "^2.43.4",
     "node-cron": "^3.0.3",
     "node-telegram-bot-api": "^0.64.0",
-    "pdf-parse": "^2.4.5"
+    "pdf-parse": "^2.4.5",
+    "postgres": "^3.4.9",
+    "thirdweb": "^5.120.1"
   },
   "devDependencies": {
     "@types/node": "^20.14.10",

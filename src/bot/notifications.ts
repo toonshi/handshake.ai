@@ -1,8 +1,6 @@
 import TelegramBot from 'node-telegram-bot-api';
 import { Match, User } from '../types';
 import { updateMatch, getUserById, getUserByTelegramId, setUserAcceptAll } from '../db/supabase';
-import { generateCallScripts } from '../introduction/callscript';
-import { initiateOutboundCall } from '../introduction/elevenlabs';
 
 let _bot: TelegramBot | null = null;
 
@@ -14,6 +12,11 @@ function getBot(): TelegramBot {
   if (!_bot) throw new Error('Bot not initialized');
   return _bot;
 }
+
+const esc = (unsafe: string) => unsafe
+  .replace(/&/g, "&amp;")
+  .replace(/</g, "&lt;")
+  .replace(/>/g, "&gt;");
 
 function buildMatchMessage(
   matchedUser: User,
@@ -36,22 +39,23 @@ function buildMatchMessage(
       : '→ none identified';
 
   const matchIdParty = `${match.id}_${party}`;
+  void matchIdParty;
 
-  return `🤝 *Your agent found a match.*
+  return `🤝 <b>Your agent found a match.</b>
 
-*${matchedUser.name}* · ${matchedUser.role}
+<b>${esc(matchedUser.name)}</b> · ${esc(matchedUser.role)}
 
-📋 *Why:*
-${rationaleText}
+📋 <b>Why:</b>
+${esc(rationaleText)}
 
-🛠 *Shared / complementary tech:*
-${techStack}
+🛠 <b>Shared / complementary tech:</b>
+${esc(techStack)}
 
-🎯 *Collaboration opportunities:*
-${opportunities}
+🎯 <b>Collaboration opportunities:</b>
+${esc(opportunities)}
 
-💬 *Open with:*
-_"${match.conversation_starter}"_`;
+💬 <b>Open with:</b>
+<i>"${esc(match.conversation_starter)}"</i>`;
 }
 
 export async function sendMatchNotification(
@@ -86,13 +90,17 @@ export async function sendMatchNotification(
 
   await Promise.all([
     bot.sendMessage(userA.telegram_id, messageA, {
-      parse_mode: 'Markdown',
+      parse_mode: 'HTML',
       reply_markup: inlineKeyboardA,
-    }),
+    }).catch((err) =>
+      console.error(`[Notifications] Failed to send match notification to User A (${userA.name}):`, err)
+    ),
     bot.sendMessage(userB.telegram_id, messageB, {
-      parse_mode: 'Markdown',
+      parse_mode: 'HTML',
       reply_markup: inlineKeyboardB,
-    }),
+    }).catch((err) =>
+      console.error(`[Notifications] Failed to send match notification to User B (${userB.name}):`, err)
+    ),
   ]);
 
   console.log(`[Notifications] Sent match notifications for match ${match.id}`);
@@ -119,7 +127,7 @@ export async function sendMatchNotificationToUser(
   };
 
   await bot.sendMessage(notifyUser.telegram_id, message, {
-    parse_mode: 'Markdown',
+    parse_mode: 'HTML',
     reply_markup: inlineKeyboard,
   });
 
@@ -243,71 +251,34 @@ export async function initiateCallsForMatch(match: Match): Promise<void> {
     return;
   }
 
-  let scripts;
-  try {
-    scripts = await generateCallScripts(match, userA, userB);
-  } catch (err) {
-    console.error('[Notifications] Failed to generate call scripts:', err);
-    scripts = {
-      personAScript: `Hi ${userA.name} — this is Kuzana Connector. Your agent found a match with ${userB.name}. Check your Telegram for details. Good luck.`,
-      personBScript: `Hi ${userB.name} — this is Kuzana Connector. Your agent found a match with ${userA.name}. Check your Telegram for details. Good luck.`,
-    };
-  }
-
   // Send Telegram message with other person's contact
-  const telegramMessageA = `📞 *The intro is confirmed!*
+  const telegramMessageA = `📞 <b>The intro is confirmed!</b>
 
-Here's ${userB.name}'s info:
-${userB.telegram_username ? `Telegram: @${userB.telegram_username}` : 'No username — ask me if you need help connecting'}${userB.wallet_address ? `\nAVAX wallet: \`${userB.wallet_address}\`` : ''}
+Here's ${esc(userB.name)}'s info:
+${userB.telegram_username ? `Telegram: @${esc(userB.telegram_username)}` : 'No username — ask me if you need help connecting'}${userB.wallet_address ? `\nAVAX wallet: <code>${esc(userB.wallet_address)}</code>` : ''}
 
-💬 *Open with:*
-_"${match.conversation_starter}"_
+💬 <b>Open with:</b>
+<i>"${esc(match.conversation_starter)}"</i>
+`;
 
-${userA.phone_number ? 'We\'ll call you shortly with a full briefing.' : 'Add your phone number with /setphone to receive voice introductions next time.'}`;
+  const telegramMessageB = `📞 <b>The intro is confirmed!</b>
 
-  const telegramMessageB = `📞 *The intro is confirmed!*
+Here's ${esc(userA.name)}'s info:
+${userA.telegram_username ? `Telegram: @${esc(userA.telegram_username)}` : 'No username — ask me if you need help connecting'}${userA.wallet_address ? `\nAVAX wallet: <code>${esc(userA.wallet_address)}</code>` : ''}
 
-Here's ${userA.name}'s info:
-${userA.telegram_username ? `Telegram: @${userA.telegram_username}` : 'No username — ask me if you need help connecting'}${userA.wallet_address ? `\nAVAX wallet: \`${userA.wallet_address}\`` : ''}
-
-💬 *Open with:*
-_"${match.conversation_starter}"_
-
-${userB.phone_number ? 'We\'ll call you shortly with a full briefing.' : 'Add your phone number with /setphone to receive voice introductions next time.'}`;
+💬 <b>Open with:</b>
+<i>"${esc(match.conversation_starter)}"</i>
+`;
 
   await Promise.all([
-    bot.sendMessage(userA.telegram_id, telegramMessageA, { parse_mode: 'Markdown' }),
-    bot.sendMessage(userB.telegram_id, telegramMessageB, { parse_mode: 'Markdown' }),
+    bot.sendMessage(userA.telegram_id, telegramMessageA, { parse_mode: 'HTML' }).catch((err) =>
+      console.error(`[Notifications] Failed to send intro A to ${userA.name}:`, err)
+    ),
+    bot.sendMessage(userB.telegram_id, telegramMessageB, { parse_mode: 'HTML' }).catch((err) =>
+      console.error(`[Notifications] Failed to send intro B to ${userB.name}:`, err)
+    ),
   ]);
 
-  // Initiate ElevenLabs calls for users who have phone numbers
-  const callPromises: Promise<void>[] = [];
-
-  if (userA.phone_number) {
-    callPromises.push(
-      initiateOutboundCall(userA.phone_number, scripts.personAScript)
-        .then((convId) => {
-          console.log(`[Calls] Call initiated for ${userA.name}: ${convId}`);
-        })
-        .catch((err) => {
-          console.error(`[Calls] Failed to call ${userA.name}:`, err);
-        })
-    );
-  }
-
-  if (userB.phone_number) {
-    callPromises.push(
-      initiateOutboundCall(userB.phone_number, scripts.personBScript)
-        .then((convId) => {
-          console.log(`[Calls] Call initiated for ${userB.name}: ${convId}`);
-        })
-        .catch((err) => {
-          console.error(`[Calls] Failed to call ${userB.name}:`, err);
-        })
-    );
-  }
-
-  await Promise.all(callPromises);
   await updateMatch(match.id, { status: 'called' });
 }
 

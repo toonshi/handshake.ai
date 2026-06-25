@@ -127,28 +127,26 @@ async function handleCommand(
 
     // Check if a web-registered user has matching telegram_username
     if (username) {
-      const { createClient } = await import('@supabase/supabase-js');
-      const db = createClient(
-        process.env.SUPABASE_URL!,
-        process.env.SUPABASE_SERVICE_KEY!,
-        { auth: { persistSession: false } }
-      );
-      const { data: webUser } = await db
-        .from('users')
-        .select('*')
-        .eq('telegram_username', username)
-        .lt('telegram_id', 0)
-        .single();
-
-      if (webUser) {
-        // Update the placeholder telegram_id with the real one
-        await db.from('users').update({ telegram_id: userId }).eq('id', webUser.id);
-        await sendMessage(
-          chatId,
-          `Welcome back, ${webUser.name}! Your web registration has been linked to this Telegram account. Your agent is active.`,
-          { parse_mode: 'Markdown' }
-        );
-        return;
+      const { default: postgres } = await import('postgres');
+      const db = postgres(process.env.DATABASE_URL!, { ssl: false, max: 2 });
+      try {
+        const rows = await db`
+          SELECT * FROM users
+          WHERE telegram_username = ${username} AND telegram_id < 0
+          LIMIT 1
+        `;
+        const webUser = rows[0];
+        if (webUser) {
+          await db`UPDATE users SET telegram_id = ${userId}, updated_at = now() WHERE id = ${webUser.id}`;
+          await sendMessage(
+            chatId,
+            `Welcome back, ${webUser.name}! Your web registration has been linked to this Telegram account. Your agent is active.`,
+            { parse_mode: 'Markdown' }
+          );
+          return;
+        }
+      } finally {
+        await db.end();
       }
     }
 
@@ -261,13 +259,13 @@ ${enrichmentStatus}
       await sendMessage(chatId, 'Please complete onboarding first by sending /start.');
       return;
     }
-    const { createClient } = await import('@supabase/supabase-js');
-    const db = createClient(
-      process.env.SUPABASE_URL!,
-      process.env.SUPABASE_SERVICE_KEY!,
-      { auth: { persistSession: false } }
-    );
-    await db.from('users').update({ phone_number: phone }).eq('id', user.id);
+    const { default: postgres } = await import('postgres');
+    const db = postgres(process.env.DATABASE_URL!, { ssl: false, max: 2 });
+    try {
+      await db`UPDATE users SET phone_number = ${phone}, updated_at = now() WHERE id = ${user.id}`;
+    } finally {
+      await db.end();
+    }
     await sendMessage(chatId, `✅ Phone number saved. You'll receive voice introductions when matches are confirmed.`);
     return;
   }
@@ -280,7 +278,7 @@ ${enrichmentStatus}
   if (command === '/help') {
     await sendMessage(
       chatId,
-      `*Kuzana Connector Commands*
+      `*Handshake Commands*
 
 /start — register or check your status
 /status — view your current profile
@@ -385,7 +383,7 @@ The more context your agent has, the more specific and credible its introduction
   }
 
   // Not registered, not in onboarding
-  await sendMessage(chatId, 'Send /start to register with Kuzana Connector.');
+  await sendMessage(chatId, 'Send /start to register with Handshake.');
 }
 
 async function handleCallbackQuery(callbackQuery: {

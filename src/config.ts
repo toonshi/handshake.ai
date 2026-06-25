@@ -31,20 +31,26 @@ function optional(key: string, fallback: string): string {
 export const config = {
   telegram: {
     token: required('TELEGRAM_BOT_TOKEN'),
+    /** Local dev: long-polling. Production (Vercel): webhook via /api/bot */
+    usePolling: optional('TELEGRAM_USE_POLLING', 'true') === 'true',
   },
   gemini: {
-    apiKey: required('GEMINI_API_KEY'),
+    apiKey: optional('GEMINI_API_KEY', ''),
     textModel: optional('GEMINI_TEXT_MODEL', 'gemini-2.5-flash'),
     embeddingModel: optional('GEMINI_EMBEDDING_MODEL', 'gemini-embedding-2'),
     embeddingDimensions: parseInt(optional('GEMINI_EMBEDDING_DIMENSIONS', '1536'), 10),
   },
-  supabase: {
-    url: required('SUPABASE_URL'),
-    serviceKey: required('SUPABASE_SERVICE_KEY'),
+  db: {
+    url: optional('DATABASE_URL', 'postgresql://handshake:handshake_db_pass_2024@104.248.134.75:5432/handshake'),
+  },
+  openrouter: {
+    apiKey: optional('OPENROUTER_API_KEY', ''),
+    model: optional('OPENROUTER_MODEL', 'openai/gpt-4o'),
+    embeddingModel: optional('OPENROUTER_EMBEDDING_MODEL', 'openai/text-embedding-3-small'),
   },
   elevenlabs: {
-    apiKey: required('ELEVENLABS_API_KEY'),
-    agentId: required('ELEVENLABS_AGENT_ID'),
+    apiKey: optional('ELEVENLABS_API_KEY', ''),
+    agentId: optional('ELEVENLABS_AGENT_ID', ''),
     agentTemplateId: optional('ELEVENLABS_AGENT_TEMPLATE_ID', ''),
   },
   matching: {

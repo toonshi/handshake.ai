@@ -1,12 +1,1 @@
-{
-  "buildCommand": "cd web && npm install && npm run build",
-  "outputDirectory": "web/.next",
-  "installCommand": "cd web && npm install",
-  "framework": "nextjs",
-  "crons": [
-    {
-      "path": "/api/match",
-      "schedule": "0 */2 * * *"
-    }
-  ]
-}
+{}

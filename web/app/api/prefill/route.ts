@@ -43,7 +43,7 @@ function extractGitHubUsername(input: string): string | null {
 async function fetchGitHubData(username: string): Promise<string> {
   const token = process.env.GITHUB_TOKEN;
   const headers: Record<string, string> = {
-    "User-Agent": "kuzana-connector",
+    "User-Agent": "handshake-ai",
     Accept: "application/vnd.github.v3+json",
   };
   if (token) headers["Authorization"] = `Bearer ${token}`;
@@ -104,7 +104,7 @@ async function fetchUrlData(url: string): Promise<string> {
   const res = await fetch(jinaUrl, {
     headers: {
       "Accept": "text/plain",
-      "User-Agent": "kuzana-connector",
+      "User-Agent": "handshake-ai",
     },
     signal: AbortSignal.timeout(15_000),
   });
@@ -174,7 +174,7 @@ export async function POST(req: NextRequest) {
     const { input } = await req.json() as { input: string };
 
     if (!input?.trim()) {
-      return NextResponse.json({ error: "No input provided" }, { status: 400 });
+      return NextResponse.json({ error: "No input provided" });
     }
 
     const trimmed = input.trim();
@@ -225,6 +225,6 @@ export async function POST(req: NextRequest) {
     return NextResponse.json(result);
   } catch (err) {
     const message = err instanceof Error ? err.message : "Failed to fetch profile";
-    return NextResponse.json({ error: message }, { status: 400 });
+    return NextResponse.json({ error: message });
   }
 }

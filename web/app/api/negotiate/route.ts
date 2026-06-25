@@ -2,20 +2,11 @@ export const maxDuration = 60;
 export const dynamic = 'force-dynamic';
 
 import { NextRequest } from "next/server";
-import { createClient } from "@supabase/supabase-js";
+import { getUserById, createMatch } from "@/lib/db";
 import { runAgentNegotiationStreaming } from "@/lib/agents/negotiation";
-import { createMatch } from "@/lib/db";
 import type { User } from "@/lib/types";
 
 const SCORE_THRESHOLD = parseFloat(process.env.MATCH_SCORE_THRESHOLD ?? '0.72');
-
-function getSupabase() {
-  return createClient(
-    process.env.SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_KEY!,
-    { auth: { persistSession: false } }
-  );
-}
 
 export async function POST(req: NextRequest) {
   const enc = new TextEncoder();
@@ -30,10 +21,9 @@ export async function POST(req: NextRequest) {
     start(controller) {
       void (async () => {
         try {
-          const supabase = getSupabase();
-          const [{ data: userA }, { data: userB }] = await Promise.all([
-            supabase.from("users").select("*").eq("id", userAId).single(),
-            supabase.from("users").select("*").eq("id", userBId).single(),
+          const [userA, userB] = await Promise.all([
+            getUserById(userAId),
+            getUserById(userBId),
           ]);
 
           if (!userA || !userB) {
@@ -52,16 +42,24 @@ export async function POST(req: NextRequest) {
 
           await runAgentNegotiationStreaming(userA as User, userB as User, {
             onTurnStart: (agent, name, turn) => {
-              controller.enqueue(sseEvent("turn_start", { agent, name, turn }));
+              try {
+                controller.enqueue(sseEvent("turn_start", { agent, name, turn }));
+              } catch (e) {}
             },
             onToken: (agent, text) => {
-              controller.enqueue(sseEvent("token", { agent, text }));
+              try {
+                controller.enqueue(sseEvent("token", { agent, text }));
+              } catch (e) {}
             },
             onTurnEnd: (agent, turn) => {
-              controller.enqueue(sseEvent("turn_end", { agent, turn }));
+              try {
+                controller.enqueue(sseEvent("turn_end", { agent, turn }));
+              } catch (e) {}
             },
             onScoring: () => {
-              controller.enqueue(sseEvent("phase", { phase: "scoring" }));
+              try {
+                controller.enqueue(sseEvent("phase", { phase: "scoring" }));
+              } catch (e) {}
             },
             onResult: async (result) => {
               const isHighConfidence =
@@ -90,22 +88,30 @@ export async function POST(req: NextRequest) {
                 }
               }
 
-              controller.enqueue(sseEvent("result", {
-                agentAScore: result.agentAScore,
-                agentBScore: result.agentBScore,
-                rationale: result.rationale,
-                conversationStarter: result.conversationStarter,
-                collaborationOpportunities: result.collaborationOpportunities,
-                sharedTechStack: result.sharedTechStack,
-                matchId: savedMatchId,
-              }));
+              try {
+                controller.enqueue(sseEvent("result", {
+                  agentAScore: result.agentAScore,
+                  agentBScore: result.agentBScore,
+                  rationale: result.rationale,
+                  conversationStarter: result.conversationStarter,
+                  collaborationOpportunities: result.collaborationOpportunities,
+                  sharedTechStack: result.sharedTechStack,
+                  matchId: savedMatchId,
+                }));
+              } catch (enqueueErr) {
+                console.warn('[negotiate] Failed to enqueue result (client disconnected):', enqueueErr);
+              }
             },
           });
         } catch (err) {
           const message = err instanceof Error ? err.message : 'Unknown error';
-          controller.enqueue(sseEvent("error", { message }));
+          try {
+            controller.enqueue(sseEvent("error", { message }));
+          } catch (e) {}
         } finally {
-          controller.close();
+          try {
+            controller.close();
+          } catch (e) {}
         }
       })();
     },

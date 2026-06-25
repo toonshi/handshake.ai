@@ -20,7 +20,7 @@ Why they match: ${match.rationale}
 Conversation starter: ${match.conversation_starter}
 
 Rules:
-- Start with: "Hi [Name] — this is Kuzana Connector."
+- Start with: "Hi [Name] — this is Handshake."
 - Mention the other person's name and ONE specific, concrete reason to connect
 - Tell them to check Telegram for contact details and the conversation starter
 - End with "Good luck."
@@ -40,8 +40,8 @@ Return as JSON only (no markdown):
     return JSON.parse(cleaned) as CallScript;
   } catch {
     return {
-      personAScript: `Hi ${userA.name} — this is Kuzana Connector. Your agent identified a high-confidence match. ${userB.name} may be able to help with your current challenge. Check your Telegram for their contact and a conversation starter. Good luck.`,
-      personBScript: `Hi ${userB.name} — this is Kuzana Connector. Your agent identified a high-confidence match. ${userA.name} is working on something where your expertise is directly relevant. Check your Telegram for their contact and a conversation starter. Good luck.`,
+      personAScript: `Hi ${userA.name} — this is Handshake. Your agent identified a high-confidence match. ${userB.name} may be able to help with your current challenge. Check your Telegram for their contact and a conversation starter. Good luck.`,
+      personBScript: `Hi ${userB.name} — this is Handshake. Your agent identified a high-confidence match. ${userA.name} is working on something where your expertise is directly relevant. Check your Telegram for their contact and a conversation starter. Good luck.`,
     };
   }
 }

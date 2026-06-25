@@ -1,24 +1,20 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createClient } from "@supabase/supabase-js";
+import postgres from "postgres";
 import { generateGeminiEmbedding, generateGeminiText } from "@/lib/gemini";
+import { updateUserEnrichments } from "@/lib/db";
+import type { ProfileEnrichments } from "@/lib/types";
 
-function getSupabase() {
-  return createClient(
-    process.env.SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_KEY!,
-    { auth: { persistSession: false } }
-  );
-}
+const sql = postgres(process.env.DATABASE_URL!, { ssl: false, max: 5 });
 
 async function fetchGitHubSummary(username: string): Promise<string> {
   try {
     const [userRes, reposRes] = await Promise.all([
       fetch(`https://api.github.com/users/${encodeURIComponent(username)}`, {
-        headers: { "User-Agent": "kuzana-connector" },
+        headers: { "User-Agent": "handshake-ai" },
       }),
       fetch(
         `https://api.github.com/users/${encodeURIComponent(username)}/repos?sort=stars&per_page=5&type=owner`,
-        { headers: { "User-Agent": "kuzana-connector" } }
+        { headers: { "User-Agent": "handshake-ai" } }
       ),
     ]);
     if (!userRes.ok) return "";
@@ -40,7 +36,7 @@ async function fetchGitHubSummary(username: string): Promise<string> {
 async function scrapeWebsite(url: string): Promise<string> {
   try {
     const res = await fetch(url, {
-      headers: { "User-Agent": "Mozilla/5.0 (compatible; KuzanaConnector/1.0)" },
+      headers: { "User-Agent": "Mozilla/5.0 (compatible; HandshakeAI/1.0)" },
       signal: AbortSignal.timeout(8000),
     });
     if (!res.ok) return "";
@@ -84,31 +80,26 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
     }
 
-    const supabase = getSupabase();
-
     // Check if already registered by telegram username
-    const { data: existing } = await supabase
-      .from("users")
-      .select("id, name")
-      .eq("telegram_username", telegram_username)
-      .single();
-
-    if (existing) {
+    const existingRows = await sql<Array<{ id: string; name: string }>>`
+      SELECT id, name FROM users WHERE telegram_username = ${telegram_username} LIMIT 1
+    `;
+    if (existingRows.length > 0) {
       return NextResponse.json(
-        { error: `@${telegram_username} is already registered as ${existing.name}` },
+        { error: `@${telegram_username} is already registered as ${existingRows[0].name}` },
         { status: 409 }
       );
     }
 
     // Gather enrichment context for embedding
     const enrichmentParts: string[] = [];
-    const enrichments: Record<string, unknown> = { websites: [] };
+    const enrichments: ProfileEnrichments = { websites: [] };
 
     if (github_username) {
       const summary = await fetchGitHubSummary(github_username);
       if (summary) {
         enrichmentParts.push(summary);
-        enrichments.github = { username: github_username, fetchedAt: new Date().toISOString() };
+        enrichments.github = { username: github_username, fetchedAt: new Date().toISOString() } as ProfileEnrichments["github"];
       }
     }
 
@@ -116,11 +107,11 @@ export async function POST(req: NextRequest) {
       const summary = await scrapeWebsite(website_url);
       if (summary) {
         enrichmentParts.push(summary);
-        (enrichments.websites as unknown[]).push({
+        enrichments.websites.push({
           url: website_url,
           summary,
           fetchedAt: new Date().toISOString(),
-        });
+        } as ProfileEnrichments["websites"][number]);
       }
     }
 
@@ -137,32 +128,31 @@ export async function POST(req: NextRequest) {
     // The Telegram bot will update this when the user messages it
     const placeholderTelegramId = -(Date.now() % 2147483647);
 
-    const { data: user, error } = await supabase
-      .from("users")
-      .insert({
-        telegram_id: placeholderTelegramId,
-        telegram_username,
-        phone_number: phone_number || null,
-        wallet_address: wallet_address || null,
-        name,
-        role,
-        description,
-        goals,
-        challenges,
-        offers,
-        enrichments,
-        goal_embedding: goalEmbedding,
-        challenge_embedding: challengeEmbedding,
-      })
-      .select()
-      .single();
+    const inserted = await sql<Array<{ id: string }>>`
+      INSERT INTO users (
+        telegram_id, telegram_username, phone_number, wallet_address,
+        name, role, description, goals, challenges, offers,
+        goal_embedding, challenge_embedding
+      ) VALUES (
+        ${placeholderTelegramId}, ${telegram_username},
+        ${phone_number || null}, ${wallet_address || null},
+        ${name}, ${role}, ${description}, ${goals}, ${challenges}, ${offers},
+        ${JSON.stringify(goalEmbedding)}::vector,
+        ${JSON.stringify(challengeEmbedding)}::vector
+      )
+      RETURNING id
+    `;
 
-    if (error) {
-      console.error("[register]", error);
-      return NextResponse.json({ error: error.message }, { status: 500 });
+    const userId = inserted[0]?.id;
+    if (!userId) {
+      return NextResponse.json({ error: "Failed to create user" }, { status: 500 });
     }
 
-    return NextResponse.json({ success: true, userId: user.id });
+    if (Object.keys(enrichments).length > 1) {
+      await updateUserEnrichments(userId, enrichments).catch(() => {});
+    }
+
+    return NextResponse.json({ success: true, userId });
   } catch (err) {
     const msg = err instanceof Error ? err.message : "Internal error";
     console.error("[register]", err);

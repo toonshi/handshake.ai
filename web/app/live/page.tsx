@@ -1,7 +1,11 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
-import Link from "next/link";
+import { useCallback, useEffect, useRef, useState } from "react";
+import SiteHeader from "@/components/site-header";
+import CompatibilityScore from "@/components/compatibility-score";
+import ScoreBar from "@/components/ui/score-bar";
+import { Button } from "@/components/ui/button";
+import { MATCH_THRESHOLD } from "@/lib/constants";
 
 interface DemoUser {
   id: string;
@@ -30,6 +34,7 @@ interface LiveResult {
 }
 
 type Phase = "idle" | "scanning" | "negotiating" | "scoring" | "done" | "error";
+type ConsentStatus = "idle" | "loading" | "done" | "error";
 
 const PHASE_LABELS: Record<Phase, string> = {
   idle: "Ready",
@@ -40,33 +45,63 @@ const PHASE_LABELS: Record<Phase, string> = {
   error: "Error",
 };
 
+const STEPS = [
+  { key: "scanning", label: "Scan" },
+  { key: "negotiating", label: "Negotiate" },
+  { key: "scoring", label: "Score" },
+  { key: "done", label: "Result" },
+] as const;
+
 export default function LivePage() {
   const [users, setUsers] = useState<DemoUser[]>([]);
+  const [usersLoading, setUsersLoading] = useState(true);
   const [userAId, setUserAId] = useState("");
   const [userBId, setUserBId] = useState("");
   const [phase, setPhase] = useState<Phase>("idle");
   const [bubbles, setBubbles] = useState<AgentBubble[]>([]);
   const [result, setResult] = useState<LiveResult | null>(null);
-  const [consentStatus, setConsentStatus] = useState<"idle" | "loading" | "done">("idle");
+  const [consentStatus, setConsentStatus] = useState<ConsentStatus>("idle");
+  const [consentError, setConsentError] = useState<string | null>(null);
+  const [txHash, setTxHash] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [seeding, setSeeding] = useState(false);
   const chatEndRef = useRef<HTMLDivElement>(null);
 
-  useEffect(() => {
-    fetch("/api/users")
-      .then((r) => r.json())
-      .then((d) => {
-        setUsers(d.users ?? []);
-        if (d.users?.length >= 2) {
-          setUserAId(d.users[0].id);
-          setUserBId(d.users[1].id);
-        }
-      })
-      .catch(() => {});
+  const loadUsers = useCallback(async () => {
+    setUsersLoading(true);
+    try {
+      const r = await fetch("/api/users");
+      const d = await r.json();
+      const list = d.users ?? [];
+      setUsers(list);
+      if (list.length >= 2) {
+        setUserAId(list[0].id);
+        setUserBId(list[1].id);
+      }
+    } catch {
+      setUsers([]);
+    } finally {
+      setUsersLoading(false);
+    }
   }, []);
+
+  useEffect(() => {
+    loadUsers();
+  }, [loadUsers]);
 
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [bubbles]);
+
+  async function seedDemo() {
+    setSeeding(true);
+    try {
+      await fetch("/api/seed-demo", { method: "POST" });
+      await loadUsers();
+    } finally {
+      setSeeding(false);
+    }
+  }
 
   async function startNegotiation() {
     if (!userAId || !userBId || userAId === userBId) return;
@@ -74,6 +109,7 @@ export default function LivePage() {
     setResult(null);
     setError(null);
     setConsentStatus("idle");
+    setConsentError(null);
     setPhase("scanning");
 
     try {
@@ -106,7 +142,7 @@ export default function LivePage() {
               const payload = JSON.parse(line.slice(6));
               handleEvent(pendingEvent, payload);
             } catch {
-              // malformed
+              // malformed SSE chunk
             }
             pendingEvent = "";
           }
@@ -136,7 +172,6 @@ export default function LivePage() {
         const { agent, text } = payload as { agent: "A" | "B"; text: string };
         setBubbles((prev) => {
           const copy = [...prev];
-          // Find the last bubble for this agent that isn't done
           for (let i = copy.length - 1; i >= 0; i--) {
             if (copy[i].agent === agent && !copy[i].done) {
               copy[i] = { ...copy[i], text: copy[i].text + text };
@@ -177,16 +212,20 @@ export default function LivePage() {
   async function handleConsent() {
     if (!result?.matchId) return;
     setConsentStatus("loading");
+    setConsentError(null);
     try {
       const res = await fetch("/api/consent", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ matchId: result.matchId }),
       });
-      if (!res.ok) throw new Error("Failed");
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error ?? "Failed to connect");
+      setTxHash(json.tx_hash ?? null);
       setConsentStatus("done");
-    } catch {
-      setConsentStatus("idle");
+    } catch (err) {
+      setConsentStatus("error");
+      setConsentError(err instanceof Error ? err.message : "Connection failed");
     }
   }
 
@@ -196,237 +235,416 @@ export default function LivePage() {
     setError(null);
     setPhase("idle");
     setConsentStatus("idle");
+    setConsentError(null);
+    setTxHash(null);
   }
 
   const userA = users.find((u) => u.id === userAId);
   const userB = users.find((u) => u.id === userBId);
   const isRunning = phase === "scanning" || phase === "negotiating" || phase === "scoring";
+  const canStart = userAId && userBId && userAId !== userBId && !isRunning;
+  const matchQualified =
+    result &&
+    result.agentAScore >= MATCH_THRESHOLD &&
+    result.agentBScore >= MATCH_THRESHOLD &&
+    result.matchId;
+
+  const currentStepIdx = STEPS.findIndex((s) => s.key === (phase === "error" ? "done" : phase));
 
   return (
-    <main className="min-h-screen px-4 py-10 sm:py-16">
-      <div className="max-w-3xl mx-auto space-y-6">
+  <>
+    <div className="page-bg" />
+    <div className="page-content min-h-screen">
+      <SiteHeader active="live" />
 
-        {/* Header */}
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="flex items-center gap-2 text-xs font-mono text-[#52525b] border border-[#27272a] rounded-full px-3 py-1.5">
-              <span className={`w-1.5 h-1.5 rounded-full inline-block ${isRunning ? "bg-[#4ade80] animate-pulse" : phase === "done" ? "bg-[#4ade80]" : "bg-[#52525b]"}`} />
-              {PHASE_LABELS[phase]}
+      <main className="px-4 py-8 sm:py-12">
+        <div className="max-w-4xl mx-auto space-y-8">
+
+          {/* Hero */}
+          <div className="space-y-3">
+            <div className="flex items-center gap-2">
+              <StatusBadge phase={phase} isRunning={isRunning} />
             </div>
+            <h1 className="text-2xl sm:text-3xl font-semibold text-white tracking-tight">
+              Live agent negotiation
+            </h1>
+            <p className="text-sm text-[var(--muted)] max-w-2xl leading-relaxed">
+              Every registered user gets an AI agent built from their profile — their goals, their challenges, what they bring to the table.
+              Select any two people below and watch their agents run a real negotiation: five turns, scored from both sides, with a connection only made when both agents agree it clears the bar.
+            </p>
           </div>
-          <Link href="/" className="text-xs text-[#52525b] hover:text-white transition-colors">
-            ← Back
-          </Link>
-        </div>
 
-        <div>
-          <h1 className="text-2xl font-semibold text-white">Agent Negotiation</h1>
-          <p className="text-sm text-[#71717a] mt-1">
-            Two AI agents negotiate introductions in real time — you decide whether to connect.
-          </p>
-        </div>
-
-        {/* User selector */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <UserCard
-            label="Agent A"
-            color="green"
-            users={users}
-            selectedId={userAId}
-            excludeId={userBId}
-            onChange={setUserAId}
-            user={userA}
-            disabled={isRunning}
-          />
-          <UserCard
-            label="Agent B"
-            color="indigo"
-            users={users}
-            selectedId={userBId}
-            excludeId={userAId}
-            onChange={setUserBId}
-            user={userB}
-            disabled={isRunning}
-          />
-        </div>
-
-        {/* Start button */}
-        {phase === "idle" && (
-          <button
-            onClick={startNegotiation}
-            disabled={!userAId || !userBId || userAId === userBId}
-            className="w-full bg-white text-black font-medium text-sm rounded-xl py-3 px-4 hover:bg-[#ededed] disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-          >
-            Start Agent Negotiation →
-          </button>
-        )}
-
-        {/* Phase progress bar */}
-        {phase !== "idle" && (
-          <div className="flex items-center gap-2">
-            {(["scanning", "negotiating", "scoring", "done"] as const).map((p, i) => {
-              const phases = ["scanning", "negotiating", "scoring", "done"];
-              const currentIdx = phases.indexOf(phase === "error" ? "done" : phase);
-              const isActive = i <= currentIdx;
-              return (
-                <div key={p} className="flex items-center gap-2 flex-1">
-                  <div className={`h-1 flex-1 rounded-full transition-colors ${isActive ? "bg-[#4ade80]" : "bg-[#27272a]"}`} />
-                  {i === phases.length - 1 && null}
-                </div>
-              );
-            })}
-          </div>
-        )}
-
-        {/* Chat area */}
-        {bubbles.length > 0 && (
-          <div className="border border-[#27272a] rounded-2xl bg-[#0a0a0a] overflow-hidden">
-            <div className="px-4 py-3 border-b border-[#27272a] flex items-center justify-between">
-              <p className="text-xs font-mono text-[#52525b]">Agent conversation</p>
-              <div className="flex items-center gap-4 text-xs">
-                <span className="flex items-center gap-1.5 text-[#4ade80]">
-                  <span className="w-2 h-2 rounded-full bg-[#4ade80] inline-block" />
-                  {userA?.name ?? "Agent A"}
-                </span>
-                <span className="flex items-center gap-1.5 text-[#818cf8]">
-                  <span className="w-2 h-2 rounded-full bg-[#818cf8] inline-block" />
-                  {userB?.name ?? "Agent B"}
-                </span>
+          {/* Empty / loading state */}
+          {usersLoading ? (
+            <div className="card p-8 flex items-center justify-center gap-3 text-sm text-[var(--muted)]">
+              <Spinner />
+              Loading users…
+            </div>
+          ) : users.length < 2 ? (
+            <EmptyUsersState onSeed={seedDemo} seeding={seeding} />
+          ) : (
+            <>
+              {/* User selectors */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <UserCard
+                  label="Agent A"
+                  color="green"
+                  users={users}
+                  selectedId={userAId}
+                  excludeId={userBId}
+                  onChange={setUserAId}
+                  user={userA}
+                  disabled={isRunning}
+                />
+                <UserCard
+                  label="Agent B"
+                  color="indigo"
+                  users={users}
+                  selectedId={userBId}
+                  excludeId={userAId}
+                  onChange={setUserBId}
+                  user={userB}
+                  disabled={isRunning}
+                />
               </div>
-            </div>
 
-            <div className="p-4 space-y-4 max-h-[500px] overflow-y-auto">
-              {bubbles.map((bubble, i) => (
-                <div
-                  key={i}
-                  className={`flex ${bubble.agent === "A" ? "justify-start" : "justify-end"}`}
-                >
-                  <div className={`max-w-[85%] space-y-1 ${bubble.agent === "B" ? "items-end flex flex-col" : ""}`}>
-                    <p className={`text-[10px] font-mono px-1 ${bubble.agent === "A" ? "text-[#4ade80]" : "text-[#818cf8]"}`}>
-                      {bubble.name} · Turn {bubble.turn}
-                    </p>
-                    <div className={`rounded-xl px-4 py-3 text-sm text-[#e4e4e7] leading-relaxed border ${bubble.agent === "A" ? "bg-[#0d1f0d] border-[#166534]" : "bg-[#0f0f1f] border-[#312e81]"}`}>
-                      {bubble.text}
-                      {!bubble.done && (
-                        <span className="inline-block w-0.5 h-4 bg-white ml-0.5 animate-pulse align-text-bottom" />
-                      )}
-                    </div>
-                  </div>
+              {/* VS divider when both selected */}
+              {userA && userB && phase === "idle" && (
+                <div className="flex items-center gap-3 text-xs text-[#52525b] font-mono">
+                  <span className="flex-1 h-px bg-[var(--border)]" />
+                  <span>{userA.name} vs {userB.name}</span>
+                  <span className="flex-1 h-px bg-[var(--border)]" />
                 </div>
-              ))}
+              )}
 
-              {phase === "scoring" && (
-                <div className="flex justify-center py-2">
-                  <div className="flex items-center gap-2 text-xs text-[#71717a] border border-[#27272a] rounded-full px-4 py-2 bg-[#111111]">
-                    <span className="w-3 h-3 border border-[#52525b] border-t-white rounded-full animate-spin inline-block" />
-                    Agents scoring the match…
+              {/* Start */}
+              {phase === "idle" && (
+                <Button fullWidth onClick={startNegotiation} disabled={!canStart}>
+                  Start agent negotiation →
+                </Button>
+              )}
+
+              {/* Step progress */}
+              {phase !== "idle" && (
+                <div className="space-y-2">
+                  <div className="flex gap-1">
+                    {STEPS.map((step, i) => {
+                      const active = i <= currentStepIdx;
+                      return (
+                        <div key={step.key} className="flex-1 space-y-1.5">
+                          <div
+                            className={`h-1 rounded-full transition-all duration-500 ${
+                              active ? "bg-[var(--success)]" : "bg-[var(--border)]"
+                            }`}
+                          />
+                          <p
+                            className={`text-[10px] font-mono text-center ${
+                              active ? "text-[var(--success)]" : "text-[#52525b]"
+                            }`}
+                          >
+                            {step.label}
+                          </p>
+                        </div>
+                      );
+                    })}
                   </div>
                 </div>
               )}
-              <div ref={chatEndRef} />
-            </div>
-          </div>
-        )}
 
-        {/* Result card */}
-        {result && (
-          <div className="border border-[#27272a] rounded-2xl bg-[#111111] overflow-hidden space-y-0">
-            {/* Scores */}
-            <div className="px-5 py-4 border-b border-[#27272a]">
-              <p className="text-xs font-mono text-[#52525b] mb-3">Match scores</p>
-              <div className="grid grid-cols-2 gap-4">
-                <ScoreBar label={userA?.name ?? "Agent A"} score={result.agentAScore} color="green" />
-                <ScoreBar label={userB?.name ?? "Agent B"} score={result.agentBScore} color="indigo" />
-              </div>
-            </div>
+              {/* Chat */}
+              {bubbles.length > 0 && (
+                <div className="card overflow-hidden animate-fade-up">
+                  <div className="px-4 py-3 border-b border-[var(--border)] flex items-center justify-between gap-4">
+                    <p className="text-xs font-mono text-[#52525b]">Negotiation transcript</p>
+                    <div className="flex items-center gap-3 text-xs">
+                      <span className="flex items-center gap-1.5 text-[var(--agent-a)]">
+                        <span className="w-2 h-2 rounded-full bg-[var(--agent-a)]" />
+                        {userA?.name ?? "Agent A"}
+                      </span>
+                      <span className="text-[#52525b]">↔</span>
+                      <span className="flex items-center gap-1.5 text-[var(--agent-b)]">
+                        <span className="w-2 h-2 rounded-full bg-[var(--agent-b)]" />
+                        {userB?.name ?? "Agent B"}
+                      </span>
+                    </div>
+                  </div>
 
-            {/* Tech stack */}
-            {result.sharedTechStack.length > 0 && (
-              <div className="px-5 py-4 border-b border-[#27272a]">
-                <p className="text-xs font-mono text-[#52525b] mb-2">Shared / complementary tech</p>
-                <div className="flex flex-wrap gap-2">
-                  {result.sharedTechStack.map((t) => (
-                    <span key={t} className="text-xs text-[#a1a1aa] bg-[#18181b] border border-[#27272a] rounded-lg px-2.5 py-1">
-                      {t}
-                    </span>
-                  ))}
+                  <div
+                    className="p-4 space-y-4 max-h-[480px] overflow-y-auto"
+                    aria-live="polite"
+                    aria-label="Agent conversation"
+                  >
+                    {bubbles.map((bubble, i) => (
+                      <div
+                        key={i}
+                        className={`flex ${bubble.agent === "A" ? "justify-start" : "justify-end"}`}
+                      >
+                        <div
+                          className={`max-w-[88%] space-y-1 ${
+                            bubble.agent === "B" ? "items-end flex flex-col" : ""
+                          }`}
+                        >
+                          <p
+                            className={`text-[10px] font-mono px-1 ${
+                              bubble.agent === "A" ? "text-[var(--agent-a)]" : "text-[var(--agent-b)]"
+                            }`}
+                          >
+                            {bubble.name} · Turn {bubble.turn}
+                          </p>
+                          <div
+                            className={`rounded-2xl px-4 py-3 text-sm text-[#e4e4e7] leading-relaxed border ${
+                              bubble.agent === "A"
+                                ? "bg-[#0d1f0d] border-[#166534]/60 rounded-tl-sm"
+                                : "bg-[#0f0f1f] border-[#312e81]/60 rounded-tr-sm"
+                            }`}
+                          >
+                            {bubble.text}
+                            {!bubble.done && (
+                              <span className="inline-block w-0.5 h-4 bg-white ml-0.5 cursor-blink align-text-bottom" />
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+
+                    {phase === "scoring" && (
+                      <div className="flex justify-center py-3">
+                        <div className="flex items-center gap-2 text-xs text-[var(--muted)] border border-[var(--border)] rounded-full px-4 py-2 bg-[var(--surface-2)]">
+                          <Spinner />
+                          Evaluating compatibility…
+                        </div>
+                      </div>
+                    )}
+                    <div ref={chatEndRef} />
+                  </div>
                 </div>
-              </div>
-            )}
+              )}
 
-            {/* Collaboration opportunities */}
-            {result.collaborationOpportunities.length > 0 && (
-              <div className="px-5 py-4 border-b border-[#27272a]">
-                <p className="text-xs font-mono text-[#52525b] mb-2">Collaboration opportunities</p>
-                <ul className="space-y-1.5">
-                  {result.collaborationOpportunities.map((o) => (
-                    <li key={o} className="text-sm text-[#a1a1aa] flex items-start gap-2">
-                      <span className="text-[#4ade80] mt-0.5 shrink-0">→</span>
-                      {o}
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            )}
+              {/* Results */}
+              {result && (
+                <div className="card overflow-hidden animate-fade-up space-y-0">
+                  {/* Compatibility hero */}
+                  <div className="px-5 sm:px-6 py-6 border-b border-[var(--border)] bg-[var(--surface-2)]/30">
+                    <CompatibilityScore
+                      agentAScore={result.agentAScore}
+                      agentBScore={result.agentBScore}
+                      userAName={userA?.name}
+                      userBName={userB?.name}
+                    />
+                  </div>
 
-            {/* Rationale */}
-            <div className="px-5 py-4 border-b border-[#27272a]">
-              <p className="text-xs font-mono text-[#52525b] mb-2">Why this match</p>
-              <p className="text-sm text-[#a1a1aa] leading-relaxed">{result.rationale}</p>
-            </div>
+                  {/* Individual scores */}
+                  <div className="px-5 sm:px-6 py-5 border-b border-[var(--border)]">
+                    <p className="card-header !px-0 !py-0 !border-0 mb-4">Confidence scores</p>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+                      <ScoreBar label={userA?.name ?? "Agent A"} score={result.agentAScore} color="green" />
+                      <ScoreBar label={userB?.name ?? "Agent B"} score={result.agentBScore} color="indigo" />
+                    </div>
+                  </div>
 
-            {/* Conversation starter */}
-            {result.conversationStarter && (
-              <div className="px-5 py-4 border-b border-[#27272a]">
-                <p className="text-xs font-mono text-[#52525b] mb-2">Open with</p>
-                <p className="text-sm text-white italic">&ldquo;{result.conversationStarter}&rdquo;</p>
-              </div>
-            )}
-
-            {/* Actions */}
-            <div className="px-5 py-4">
-              {consentStatus === "done" ? (
-                <div className="flex items-center gap-2 text-sm text-[#4ade80]">
-                  <span>✓</span>
-                  <span>Connected — both users will receive a Telegram message with each other&apos;s contact details.</span>
-                </div>
-              ) : (
-                <div className="flex gap-3">
-                  {result.matchId ? (
-                    <button
-                      onClick={handleConsent}
-                      disabled={consentStatus === "loading"}
-                      className="flex-1 bg-white text-black font-medium text-sm rounded-xl py-2.5 px-4 hover:bg-[#ededed] disabled:opacity-50 transition-colors"
-                    >
-                      {consentStatus === "loading" ? "Connecting…" : "✅ Connect them →"}
-                    </button>
-                  ) : (
-                    <div className="flex-1 text-center text-xs text-[#52525b] py-2.5">
-                      Scores below threshold — no match saved.
+                  {result.sharedTechStack.length > 0 && (
+                    <div className="px-5 sm:px-6 py-5 border-b border-[var(--border)]">
+                      <p className="card-header !px-0 !py-0 !border-0 mb-3">Shared tech stack</p>
+                      <div className="flex flex-wrap gap-2">
+                        {result.sharedTechStack.map((t) => (
+                          <span
+                            key={t}
+                            className="text-xs text-[var(--muted)] bg-[var(--surface-2)] border border-[var(--border)] rounded-lg px-2.5 py-1"
+                          >
+                            {t}
+                          </span>
+                        ))}
+                      </div>
                     </div>
                   )}
+
+                  {result.collaborationOpportunities.length > 0 && (
+                    <div className="px-5 sm:px-6 py-5 border-b border-[var(--border)]">
+                      <p className="card-header !px-0 !py-0 !border-0 mb-3">Where they can work together</p>
+                      <ul className="space-y-2">
+                        {result.collaborationOpportunities.map((o) => (
+                          <li key={o} className="text-sm text-[var(--muted)] flex items-start gap-2">
+                            <span className="text-[var(--success)] mt-0.5 shrink-0">→</span>
+                            {o}
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+
+                  <div className="px-5 sm:px-6 py-5 border-b border-[var(--border)]">
+                    <p className="card-header !px-0 !py-0 !border-0 mb-3">Why this match</p>
+                    <p className="text-sm text-[var(--muted)] leading-relaxed">{result.rationale}</p>
+                  </div>
+
+                  {result.conversationStarter && (
+                    <div className="px-5 sm:px-6 py-5 border-b border-[var(--border)]">
+                      <p className="card-header !px-0 !py-0 !border-0 mb-3">Suggested opener</p>
+                      <blockquote className="text-sm text-white italic border-l-2 border-[var(--success)] pl-4">
+                        &ldquo;{result.conversationStarter}&rdquo;
+                      </blockquote>
+                    </div>
+                  )}
+
+                  {/* Connect actions */}
+                  <div className="px-5 sm:px-6 py-5">
+                    {consentStatus === "done" ? (
+                      <div className="flex items-start gap-3 p-4 rounded-xl bg-[#052e16] border border-[#166534]/50 animate-fade-up">
+                        <span className="w-8 h-8 rounded-full bg-[var(--success)]/20 flex items-center justify-center text-[var(--success)] shrink-0">
+                          ✓
+                        </span>
+                        <div>
+                          <p className="text-sm font-medium text-[var(--success)]">Handshake made</p>
+                          <p className="text-sm text-[var(--muted)] mt-1 leading-relaxed">
+                            Both people have been notified on Telegram with each other&apos;s details
+                            {userA?.telegram_username || userB?.telegram_username
+                              ? " and will receive a voice briefing call."
+                              : "."}
+                          </p>
+                          {txHash && (
+                            <a
+                              href={`https://testnet.snowtrace.io/tx/${txHash}`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="mt-2 inline-flex items-center gap-1.5 text-xs text-[var(--success)] hover:underline"
+                            >
+                              ⛓ View on Avalanche →
+                            </a>
+                          )}
+                        </div>
+                      </div>
+                    ) : matchQualified ? (
+                      <div className="space-y-3">
+                        <p className="text-xs text-[var(--muted)]">
+                          In production, each person receives a Telegram prompt and consents individually. This demo connects them directly.
+                        </p>
+                        <div className="flex flex-col sm:flex-row gap-3">
+                          <Button
+                            variant="success"
+                            fullWidth
+                            onClick={handleConsent}
+                            disabled={consentStatus === "loading"}
+                            className="sm:flex-1 py-3"
+                          >
+                            {consentStatus === "loading" ? (
+                              <span className="flex items-center gap-2">
+                                <Spinner dark />
+                                Connecting…
+                              </span>
+                            ) : (
+                              <>Connect them →</>
+                            )}
+                          </Button>
+                          <Button variant="secondary" onClick={reset} className="sm:w-auto">
+                            ↺ Run again
+                          </Button>
+                        </div>
+                        {consentStatus === "error" && consentError && (
+                          <p className="text-sm text-[var(--error)] bg-[#450a0a] border border-[#7f1d1d] rounded-lg px-4 py-3">
+                            {consentError}
+                          </p>
+                        )}
+                      </div>
+                    ) : (
+                      <div className="space-y-3">
+                        <div className="flex items-start gap-3 p-4 rounded-xl bg-[var(--surface-2)] border border-[var(--border)]">
+                          <span className="text-[var(--muted)] shrink-0">—</span>
+                          <p className="text-sm text-[var(--muted)] leading-relaxed">
+                            One or both agents scored below {Math.round(MATCH_THRESHOLD * 100)}% — the bar wasn&apos;t cleared, so no match was saved. Try a different pairing or run again.
+                          </p>
+                        </div>
+                        <Button variant="secondary" fullWidth onClick={reset}>
+                          ↺ Try different pairing
+                        </Button>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {phase === "error" && error && (
+                <div className="border border-[#7f1d1d] bg-[#450a0a] rounded-xl px-4 py-3 flex items-center justify-between gap-4 animate-fade-up">
+                  <p className="text-sm text-[var(--error)]">{error}</p>
                   <button
                     onClick={reset}
-                    className="bg-[#18181b] border border-[#27272a] hover:border-[#3f3f46] text-[#a1a1aa] text-sm rounded-xl py-2.5 px-4 transition-colors"
+                    className="text-xs text-[var(--error)] hover:text-white transition-colors shrink-0"
                   >
-                    ↺ Run again
+                    Try again
                   </button>
                 </div>
               )}
-            </div>
-          </div>
-        )}
+            </>
+          )}
+        </div>
+      </main>
+    </div>
+  </>
+  );
+}
 
-        {/* Error state */}
-        {phase === "error" && error && (
-          <div className="border border-[#7f1d1d] bg-[#450a0a] rounded-xl px-4 py-3 flex items-center justify-between gap-4">
-            <p className="text-sm text-[#f87171]">{error}</p>
-            <button onClick={reset} className="text-xs text-[#f87171] hover:text-white transition-colors shrink-0">Try again</button>
-          </div>
-        )}
+function StatusBadge({ phase, isRunning }: { phase: Phase; isRunning: boolean }) {
+  return (
+    <div className="inline-flex items-center gap-2 text-xs font-mono text-[#52525b] border border-[var(--border)] rounded-full px-3 py-1.5 bg-[var(--surface)]">
+      <span
+        className={`w-1.5 h-1.5 rounded-full ${
+          isRunning
+            ? "bg-[var(--success)] animate-pulse"
+            : phase === "done"
+              ? "bg-[var(--success)]"
+              : phase === "error"
+                ? "bg-[var(--error)]"
+                : "bg-[#52525b]"
+        }`}
+      />
+      {PHASE_LABELS[phase]}
+    </div>
+  );
+}
 
+function EmptyUsersState({
+  onSeed,
+  seeding,
+}: {
+  onSeed: () => void;
+  seeding: boolean;
+}) {
+  return (
+    <div className="card p-8 sm:p-10 text-center space-y-5">
+      <div className="w-14 h-14 mx-auto rounded-2xl bg-[var(--surface-2)] border border-[var(--border)] flex items-center justify-center text-2xl text-[#52525b]">
+        ∅
       </div>
-    </main>
+      <div className="space-y-2">
+        <h2 className="text-lg font-semibold text-white">No users to match yet</h2>
+        <p className="text-sm text-[var(--muted)] max-w-sm mx-auto leading-relaxed">
+          Register at least two community members, or load the demo profiles to see a live negotiation right now.
+        </p>
+      </div>
+      <div className="flex flex-col sm:flex-row gap-3 justify-center">
+        <Button variant="success" onClick={onSeed} disabled={seeding}>
+          {seeding ? (
+            <span className="flex items-center gap-2">
+              <Spinner dark />
+              Seeding…
+            </span>
+          ) : (
+            "Load demo personas"
+          )}
+        </Button>
+        <Button variant="secondary" onClick={() => (window.location.href = "/")}>
+          Register someone →
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+function Spinner({ dark = false }: { dark?: boolean }) {
+  return (
+    <span
+      className={`w-3.5 h-3.5 border rounded-full animate-spin inline-block shrink-0 ${
+        dark ? "border-black/30 border-t-black" : "border-[#52525b] border-t-white"
+      }`}
+    />
   );
 }
 
@@ -449,15 +667,23 @@ function UserCard({
   user?: DemoUser;
   disabled: boolean;
 }) {
-  const accent = color === "green" ? "text-[#4ade80]" : "text-[#818cf8]";
-  const border = color === "green" ? "border-[#166534]" : "border-[#312e81]";
-  const bg = color === "green" ? "bg-[#0d1f0d]" : "bg-[#0f0f1f]";
+  const accent = color === "green" ? "text-[var(--agent-a)]" : "text-[var(--agent-b)]";
+  const border = color === "green" ? "border-[#166534]/50" : "border-[#312e81]/50";
+  const bg = color === "green" ? "bg-[#0d1f0d]/40" : "bg-[#0f0f1f]/40";
+  const dot = color === "green" ? "bg-[var(--agent-a)]" : "bg-[var(--agent-b)]";
 
   return (
-    <div className={`border rounded-xl p-4 space-y-3 ${user ? `${border} ${bg}` : "border-[#27272a] bg-[#111111]"}`}>
-      <p className={`text-xs font-mono ${accent}`}>{label}</p>
+    <div
+      className={`border rounded-2xl p-4 space-y-3 transition-colors ${
+        user ? `${border} ${bg}` : "border-[var(--border)] bg-[var(--surface)]"
+      }`}
+    >
+      <div className="flex items-center gap-2">
+        <span className={`w-2 h-2 rounded-full ${dot}`} />
+        <p className={`text-xs font-mono uppercase tracking-wider ${accent}`}>{label}</p>
+      </div>
       <select
-        className="w-full bg-[#18181b] border border-[#27272a] rounded-lg px-3 py-2 text-sm text-white appearance-none"
+        className="input appearance-none cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
         value={selectedId}
         onChange={(e) => onChange(e.target.value)}
         disabled={disabled}
@@ -472,37 +698,11 @@ function UserCard({
           ))}
       </select>
       {user && (
-        <p className="text-xs text-[#71717a] leading-relaxed line-clamp-3">{user.description}</p>
+        <div className="space-y-1">
+          <p className="text-xs font-medium text-white">{user.role}</p>
+          <p className="text-xs text-[#71717a] leading-relaxed line-clamp-3">{user.description}</p>
+        </div>
       )}
-    </div>
-  );
-}
-
-function ScoreBar({
-  label,
-  score,
-  color,
-}: {
-  label: string;
-  score: number;
-  color: "green" | "indigo";
-}) {
-  const pct = Math.round(score * 100);
-  const barColor = score >= 0.72 ? (color === "green" ? "bg-[#4ade80]" : "bg-[#818cf8]") : score >= 0.5 ? "bg-yellow-400" : "bg-red-400";
-  return (
-    <div className="space-y-1.5">
-      <div className="flex items-center justify-between">
-        <p className="text-xs text-[#a1a1aa] truncate max-w-[80%]">{label}</p>
-        <p className={`text-sm font-semibold tabular-nums ${score >= 0.72 ? (color === "green" ? "text-[#4ade80]" : "text-[#818cf8]") : "text-[#a1a1aa]"}`}>
-          {pct}%
-        </p>
-      </div>
-      <div className="h-1.5 bg-[#27272a] rounded-full overflow-hidden">
-        <div
-          className={`h-full rounded-full transition-all ${barColor}`}
-          style={{ width: `${pct}%` }}
-        />
-      </div>
     </div>
   );
 }

@@ -57,7 +57,7 @@ export async function scrapeAndExtract(url: string): Promise<WebsiteEnrichment> 
   const response = await fetch(url, {
     headers: {
       'User-Agent':
-        'Mozilla/5.0 (compatible; KuzanaConnector/1.0; +https://kuzana.co)',
+        'Mozilla/5.0 (compatible; HandshakeAI/1.0; +https://handshake.ai)',
       Accept: 'text/html,application/xhtml+xml',
     },
     signal: AbortSignal.timeout(10_000),
