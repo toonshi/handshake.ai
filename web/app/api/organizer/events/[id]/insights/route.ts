@@ -3,7 +3,8 @@ import { getUserEventResponses, updateEventInsights } from "@/lib/db";
 import { generateGeminiText } from "@/lib/gemini";
 import postgres from "postgres";
 
-const sql = postgres(process.env.DATABASE_URL!, { ssl: false, max: 5 });
+const isProd = process.env.NODE_ENV === 'production' || !!process.env.VERCEL;
+const sql = postgres(process.env.DATABASE_URL!, { ssl: isProd ? 'require' : false, max: 5 });
 
 export async function POST(
   req: NextRequest,
