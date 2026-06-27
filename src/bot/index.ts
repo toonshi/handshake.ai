@@ -58,6 +58,13 @@ export async function createBot(): Promise<TelegramBot> {
   setBotInstance(bot);
 
   // Polling and webhook cannot run at the same time on one bot token
+  // Stop any lingering polling session from a previous instance first
+  try {
+    await bot.stopPolling();
+  } catch {
+    // not yet polling — that's fine
+  }
+
   try {
     await bot.deleteWebHook();
     console.log('[Bot] Webhook cleared — starting long-polling');
@@ -65,7 +72,23 @@ export async function createBot(): Promise<TelegramBot> {
     console.warn('[Bot] Could not clear webhook (continuing):', err);
   }
 
-  await bot.startPolling();
+  // Retry startPolling on 409 Conflict (Telegram needs time to close old session)
+  const MAX_RETRIES = 3;
+  const RETRY_DELAY = 2000;
+  for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+    try {
+      await bot.startPolling();
+      break;
+    } catch (err: any) {
+      const isConflict = err?.code === 'ETELEGRAM' && err?.response?.statusCode === 409;
+      if (isConflict && attempt < MAX_RETRIES) {
+        console.warn(`[Bot] Polling conflict (attempt ${attempt}/${MAX_RETRIES}), retrying in ${RETRY_DELAY}ms...`);
+        await new Promise((r) => setTimeout(r, RETRY_DELAY));
+        continue;
+      }
+      throw err;
+    }
+  }
 
   // ─── /start ────────────────────────────────────────────────────────────────
 

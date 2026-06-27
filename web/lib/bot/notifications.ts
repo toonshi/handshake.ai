@@ -60,6 +60,22 @@ export async function sendMatchNotification(
   userA: User,
   userB: User
 ): Promise<void> {
+  // Skip users who haven't messaged the bot (placeholder telegram_id < 0)
+  if (userA.telegram_id < 0) {
+    console.warn(
+      `[Notifications] Skipping match notification to ${userA.name} — hasn't started the bot yet. ` +
+      `Ask them to message @HandshakeBot with /start to link their account.`
+    );
+    return;
+  }
+  if (userB.telegram_id < 0) {
+    console.warn(
+      `[Notifications] Skipping match notification to ${userB.name} — hasn't started the bot yet. ` +
+      `Ask them to message @HandshakeBot with /start to link their account.`
+    );
+    return;
+  }
+
   const messageA = buildMatchMessage(userB, match, 'a');
   const messageB = buildMatchMessage(userA, match, 'b');
 
@@ -107,6 +123,15 @@ export async function sendMatchNotificationToUser(
   matchedWithUser: User,
   party: 'a' | 'b'
 ): Promise<void> {
+  // Skip users who haven't messaged the bot (placeholder telegram_id < 0)
+  if (notifyUser.telegram_id < 0) {
+    console.warn(
+      `[Notifications] Skipping match notification to ${notifyUser.name} — hasn't started the bot yet. ` +
+      `Ask them to message @HandshakeBot with /start to link their account.`
+    );
+    return;
+  }
+
   const message = buildMatchMessage(matchedWithUser, match, party);
 
   const inlineKeyboard = {
@@ -135,6 +160,22 @@ export async function initiateCallsForMatch(match: Match): Promise<void> {
 
   if (!userA || !userB) {
     console.error(`[Notifications] Could not find users for match ${match.id}`);
+    return;
+  }
+
+  // Skip users who haven't messaged the bot (placeholder telegram_id < 0)
+  if (userA.telegram_id < 0) {
+    console.warn(
+      `[Notifications] Skipping intro to ${userA.name} — hasn't started the bot yet. ` +
+      `Ask them to message @HandshakeBot with /start to link their account.`
+    );
+    return;
+  }
+  if (userB.telegram_id < 0) {
+    console.warn(
+      `[Notifications] Skipping intro to ${userB.name} — hasn't started the bot yet. ` +
+      `Ask them to message @HandshakeBot with /start to link their account.`
+    );
     return;
   }
 

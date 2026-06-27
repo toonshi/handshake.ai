@@ -65,6 +65,18 @@ export async function sendMatchNotification(
 ): Promise<void> {
   const bot = getBot();
 
+  // Skip users who haven't messaged the bot (placeholder telegram_id < 0)
+  if (userA.telegram_id < 0) {
+    console.warn(`[Notifications] Skipping match notification to ${userA.name} — hasn't started the bot yet. ` +
+      `Ask them to message the bot with /start to link their account.`);
+    return;
+  }
+  if (userB.telegram_id < 0) {
+    console.warn(`[Notifications] Skipping match notification to ${userB.name} — hasn't started the bot yet. ` +
+      `Ask them to message the bot with /start to link their account.`);
+    return;
+  }
+
   const messageA = buildMatchMessage(userB, match, 'a');
   const messageB = buildMatchMessage(userA, match, 'b');
 
@@ -113,6 +125,13 @@ export async function sendMatchNotificationToUser(
   party: 'a' | 'b'
 ): Promise<void> {
   const bot = getBot();
+
+  // Skip users who haven't messaged the bot (placeholder telegram_id < 0)
+  if (notifyUser.telegram_id < 0) {
+    console.warn(`[Notifications] Skipping match notification to ${notifyUser.name} — hasn't started the bot yet. ` +
+      `Ask them to message the bot with /start to link their account.`);
+    return;
+  }
 
   const message = buildMatchMessage(matchedWithUser, match, party);
 
@@ -251,6 +270,18 @@ export async function initiateCallsForMatch(match: Match): Promise<void> {
     return;
   }
 
+  // Skip users who haven't messaged the bot (placeholder telegram_id < 0)
+  if (userA.telegram_id < 0) {
+    console.warn(`[Notifications] Skipping intro to ${userA.name} — hasn't started the bot yet. ` +
+      `Ask them to message the bot with /start to link their account.`);
+    return;
+  }
+  if (userB.telegram_id < 0) {
+    console.warn(`[Notifications] Skipping intro to ${userB.name} — hasn't started the bot yet. ` +
+      `Ask them to message the bot with /start to link their account.`);
+    return;
+  }
+
   // Send Telegram message with other person's contact
   const telegramMessageA = `📞 <b>The intro is confirmed!</b>
 
@@ -288,6 +319,16 @@ export async function sendFeedbackRequest(
   userB: User
 ): Promise<void> {
   const bot = getBot();
+
+  // Skip users who haven't messaged the bot (placeholder telegram_id < 0)
+  if (userA.telegram_id < 0) {
+    console.warn(`[Notifications] Skipping feedback request to ${userA.name} — hasn't started the bot yet.`);
+    return;
+  }
+  if (userB.telegram_id < 0) {
+    console.warn(`[Notifications] Skipping feedback request to ${userB.name} — hasn't started the bot yet.`);
+    return;
+  }
 
   const keyboard = {
     inline_keyboard: [
