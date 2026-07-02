@@ -2,10 +2,19 @@
 
 import { useState, useEffect } from "react";
 import SiteHeader from "@/components/site-header";
+import OrganizerAuth from "@/components/organizer-auth";
 import { Button } from "@/components/ui/button";
-import type { Event, EventPrompt, UserEventResponse } from "@/lib/types";
+import type { Event, EventPrompt, UserEventResponse, Organizer } from "@/lib/types";
+
+function authHeaders(): Record<string, string> {
+  const token = localStorage.getItem("organizer_token");
+  return token ? { Authorization: `Bearer ${token}` } : {};
+}
 
 export default function OrganizerDashboard() {
+  const [organizer, setOrganizer] = useState<Organizer | null>(null);
+  const [authLoading, setAuthLoading] = useState(true);
+
   const [events, setEvents] = useState<Event[]>([]);
   const [selectedEvent, setSelectedEvent] = useState<Event | null>(null);
   const [prompts, setPrompts] = useState<string[]>([]);
@@ -29,11 +38,49 @@ export default function OrganizerDashboard() {
   const [isGeneratingInsights, setIsGeneratingInsights] = useState(false);
   const [insightsError, setInsightsError] = useState("");
 
+  // Check for existing session on mount, then fetch events
+  useEffect(() => {
+    const token = localStorage.getItem("organizer_token");
+    if (!token) {
+      setAuthLoading(false);
+      return;
+    }
+    fetch("/api/organizer/me", {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+      .then((res) => res.json())
+      .then((data) => {
+        if (data.organizer) {
+          setOrganizer(data.organizer);
+          fetchEvents(true);
+        } else {
+          localStorage.removeItem("organizer_token");
+        }
+      })
+      .catch(() => localStorage.removeItem("organizer_token"))
+      .finally(() => setAuthLoading(false));
+  }, []);
+
+  const handleAuth = (org: Organizer, token: string) => {
+    localStorage.setItem("organizer_token", token);
+    setOrganizer(org);
+    fetchEvents(true);
+  };
+
+  const handleLogout = () => {
+    localStorage.removeItem("organizer_token");
+    setOrganizer(null);
+    setEvents([]);
+    setSelectedEvent(null);
+  };
+
   // Fetch events
   const fetchEvents = async (selectFirst = false) => {
     setIsLoadingEvents(true);
     try {
-      const res = await fetch("/api/organizer/events");
+      const res = await fetch("/api/organizer/events", {
+        headers: { ...authHeaders() },
+      });
       const data = await res.json();
       if (res.ok && data.events) {
         setEvents(data.events);
@@ -47,10 +94,6 @@ export default function OrganizerDashboard() {
       setIsLoadingEvents(false);
     }
   };
-
-  useEffect(() => {
-    fetchEvents(true);
-  }, []);
 
   const handleSelectEvent = async (event: Event) => {
     setSelectedEvent(event);
@@ -86,8 +129,8 @@ export default function OrganizerDashboard() {
 
   const handleCreateEvent = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newEventCode || !newEventName || !newOrganizerName) {
-      setCreateError("All fields are required.");
+    if (!newEventCode || !newEventName) {
+      setCreateError("Event code and name are required.");
       return;
     }
     
@@ -96,11 +139,11 @@ export default function OrganizerDashboard() {
     try {
       const res = await fetch("/api/organizer/events", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...authHeaders() },
         body: JSON.stringify({
           code: newEventCode,
           name: newEventName,
-          organizerName: newOrganizerName,
+          organizerName: organizer?.name || newOrganizerName,
         }),
       });
       const data = await res.json();
@@ -220,6 +263,32 @@ export default function OrganizerDashboard() {
     return parts.map((part, i) => i % 2 === 1 ? <strong key={i} className="text-white font-semibold">{part}</strong> : part);
   };
 
+  if (authLoading) {
+    return (
+      <>
+        <div className="page-bg" />
+        <div className="page-content min-h-screen pb-16">
+          <SiteHeader active="organizer" />
+          <div className="flex items-center justify-center min-h-[60vh]">
+            <p className="text-sm text-[var(--muted)]">Loading...</p>
+          </div>
+        </div>
+      </>
+    );
+  }
+
+  if (!organizer) {
+    return (
+      <>
+        <div className="page-bg" />
+        <div className="page-content min-h-screen pb-16">
+          <SiteHeader active="organizer" />
+          <OrganizerAuth onAuth={handleAuth} />
+        </div>
+      </>
+    );
+  }
+
   return (
     <>
       <div className="page-bg" />
@@ -230,11 +299,22 @@ export default function OrganizerDashboard() {
           {/* Header */}
           <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8">
             <div>
-              <h1 className="text-3xl font-semibold tracking-tight text-white">Organizer Panel</h1>
+              <div className="flex items-center gap-3">
+                <h1 className="text-3xl font-semibold tracking-tight text-white">Organizer Panel</h1>
+                <span className="text-[10px] font-mono text-[var(--muted)] bg-[var(--surface-2)] border border-[var(--border)] px-2 py-0.5 rounded-full">
+                  {organizer.name}
+                </span>
+              </div>
               <p className="text-[var(--muted)] text-sm">
                 Define custom questions for your events that users answer via Telegram.
               </p>
             </div>
+            <button
+              onClick={handleLogout}
+              className="text-xs text-[var(--muted)] hover:text-[var(--error)] transition-colors"
+            >
+              Sign out
+            </button>
           </div>
 
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
@@ -304,20 +384,6 @@ export default function OrganizerDashboard() {
                       required
                     />
                   </div>
-                  <div>
-                    <label className="block text-[11px] font-mono text-[var(--muted)] mb-1 uppercase tracking-wider">
-                      Organizer Name
-                    </label>
-                    <input
-                      type="text"
-                      className="input"
-                      placeholder="e.g. Avalanche Community"
-                      value={newOrganizerName}
-                      onChange={(e) => setNewOrganizerName(e.target.value)}
-                      required
-                    />
-                  </div>
-
                   {createError && (
                     <div className="text-xs text-[var(--error)] bg-[var(--error)]/5 border border-[var(--error)]/20 p-2.5 rounded-lg">
                       ⚠️ {createError}

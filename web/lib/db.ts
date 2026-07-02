@@ -1,5 +1,6 @@
 import postgres from 'postgres';
-import { User, Match, ProfileEnrichments, Event, EventPrompt, UserEventResponse } from './types';
+import { User, Match, ProfileEnrichments, Organizer, Event, EventPrompt, UserEventResponse } from './types';
+import { randomBytes, scryptSync, timingSafeEqual } from 'crypto';
 
 const isProd = process.env.NODE_ENV === 'production' || !!process.env.VERCEL;
 const sql = postgres(process.env.DATABASE_URL!, { ssl: isProd ? 'require' : false, max: 10 });
@@ -230,10 +231,90 @@ export async function deleteOnboardingSession(telegramId: number): Promise<void>
   await sql`DELETE FROM onboarding_sessions WHERE telegram_id = ${telegramId}`;
 }
 
+// ─── Organizer Auth ─────────────────────────────────────────────────────────
+
+function hashPassword(password: string): string {
+  const salt = randomBytes(16).toString('hex');
+  const derivedKey = scryptSync(password, salt, 64).toString('hex');
+  return `${salt}:${derivedKey}`;
+}
+
+function verifyPassword(password: string, hash: string): boolean {
+  const [salt, key] = hash.split(':');
+  const derivedKey = scryptSync(password, salt, 64).toString('hex');
+  return timingSafeEqual(Buffer.from(key), Buffer.from(derivedKey));
+}
+
+function generateToken(): string {
+  return randomBytes(48).toString('hex');
+}
+
+export async function createOrganizer(
+  name: string,
+  email: string,
+  password: string
+): Promise<Organizer> {
+  const passwordHash = hashPassword(password);
+  const token = generateToken();
+  const rows = await sql<Organizer[]>`
+    INSERT INTO organizers (name, email, password_hash, session_token)
+    VALUES (${name}, ${email.toLowerCase()}, ${passwordHash}, ${token})
+    RETURNING id, name, email, created_at
+  `;
+  return rows[0];
+}
+
+export async function loginOrganizer(
+  email: string,
+  password: string
+): Promise<{ organizer: Organizer; token: string } | null> {
+  const rows = await sql<Array<Organizer & { password_hash: string }>>`
+    SELECT * FROM organizers WHERE email = ${email.toLowerCase()} LIMIT 1
+  `;
+  if (rows.length === 0) return null;
+  const row = rows[0];
+  if (!verifyPassword(password, row.password_hash)) return null;
+  const token = generateToken();
+  await sql`UPDATE organizers SET session_token = ${token} WHERE id = ${row.id}`;
+  const { password_hash: _, ...organizer } = row;
+  return { organizer, token };
+}
+
+export async function getOrganizerByToken(token: string): Promise<Organizer | null> {
+  const rows = await sql<Organizer[]>`
+    SELECT id, name, email, created_at FROM organizers WHERE session_token = ${token} LIMIT 1
+  `;
+  return rows[0] ?? null;
+}
+
+export async function claimEventsForOrganizer(name: string, organizerId: string): Promise<void> {
+  await sql`
+    UPDATE events SET organizer_id = ${organizerId}
+    WHERE organizer_name = ${name} AND organizer_id IS NULL
+  `;
+}
+
 // ─── Organizer Events & Prompts ─────────────────────────────────────────────
 
-export async function getEvents(): Promise<Event[]> {
+export async function getEvents(organizerId?: string): Promise<Event[]> {
+  if (organizerId) {
+    return sql<Event[]>`SELECT * FROM events WHERE organizer_id = ${organizerId} ORDER BY created_at DESC`;
+  }
   return sql<Event[]>`SELECT * FROM events ORDER BY created_at DESC`;
+}
+
+export async function createEvent(
+  code: string,
+  name: string,
+  organizerName: string,
+  organizerId?: string
+): Promise<Event> {
+  const rows = await sql<Event[]>`
+    INSERT INTO events (code, name, organizer_name, organizer_id)
+    VALUES (${code.toUpperCase()}, ${name}, ${organizerName}, ${organizerId ?? null})
+    RETURNING *
+  `;
+  return rows[0];
 }
 
 export async function getEventByCode(code: string): Promise<Event | null> {
@@ -243,15 +324,6 @@ export async function getEventByCode(code: string): Promise<Event | null> {
 
 export async function getEventPrompts(eventId: string): Promise<EventPrompt[]> {
   return sql<EventPrompt[]>`SELECT * FROM event_prompts WHERE event_id = ${eventId} ORDER BY order_index ASC`;
-}
-
-export async function createEvent(code: string, name: string, organizerName: string): Promise<Event> {
-  const rows = await sql<Event[]>`
-    INSERT INTO events (code, name, organizer_name)
-    VALUES (${code.toUpperCase()}, ${name}, ${organizerName})
-    RETURNING *
-  `;
-  return rows[0];
 }
 
 export async function updateEventPrompts(eventId: string, prompts: string[]): Promise<void> {

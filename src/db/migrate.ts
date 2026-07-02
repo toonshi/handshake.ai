@@ -2,7 +2,7 @@ import { getDb } from './supabase';
 
 async function migrate() {
   const sql = getDb();
-  console.log('🔄 Running database migrations for Organizer Prompts feature...');
+  console.log('🔄 Running database migrations...');
 
   try {
     // 1. Create events table
@@ -12,12 +12,31 @@ async function migrate() {
         code TEXT UNIQUE NOT NULL,
         name TEXT NOT NULL,
         organizer_name TEXT NOT NULL,
+        organizer_id UUID,
+        ai_insights TEXT,
         created_at TIMESTAMPTZ NOT NULL DEFAULT now()
       )
     `;
     console.log('✅ Created events table');
 
-    // 2. Create event_prompts table
+    // 1b. Add missing columns to events if table already existed
+    await sql`ALTER TABLE events ADD COLUMN IF NOT EXISTS organizer_id UUID`;
+    await sql`ALTER TABLE events ADD COLUMN IF NOT EXISTS ai_insights TEXT`;
+
+    // 2. Create organizers table
+    await sql`
+      CREATE TABLE IF NOT EXISTS organizers (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        name TEXT NOT NULL,
+        email TEXT UNIQUE NOT NULL,
+        password_hash TEXT NOT NULL,
+        session_token TEXT,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+      )
+    `;
+    console.log('✅ Created organizers table');
+
+    // 3. Create event_prompts table
     await sql`
       CREATE TABLE IF NOT EXISTS event_prompts (
         id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -29,7 +48,7 @@ async function migrate() {
     `;
     console.log('✅ Created event_prompts table');
 
-    // 3. Create user_event_responses table
+    // 4. Create user_event_responses table
     await sql`
       CREATE TABLE IF NOT EXISTS user_event_responses (
         id UUID PRIMARY KEY DEFAULT gen_random_uuid(),

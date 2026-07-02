@@ -145,11 +145,19 @@ export interface ProfileEnrichments {
   resume?: ResumeEnrichment;
 }
 
+export interface Organizer {
+  id: string;
+  name: string;
+  email: string;
+  created_at: string;
+}
+
 export interface Event {
   id: string;
   code: string;
   name: string;
   organizer_name: string;
+  organizer_id?: string;
   created_at: string;
   ai_insights?: string;
 }
